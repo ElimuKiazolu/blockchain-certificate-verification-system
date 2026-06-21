@@ -413,4 +413,108 @@ describe("CertificateRegistry", function () {
       expect(await registry.verifyBatch(unknownRoot, leaf, tree.getProof(0))).to.equal(false);
     });
   });
+
+  describe("Batch verification (unified)", function () {
+    // rows[0]/[2] never expire; rows[1] expires soon (relative to chain time, which
+    // earlier tests may have advanced — so compute expiry from time.latest()).
+    let rows: LeafRow[];
+    let tree: StandardMerkleTree<LeafRow>;
+
+    // Pass a row's raw fields straight into the on-chain reconstruction entry points.
+    const verifyRow = (root: string, row: LeafRow, proof: string[]) =>
+      registry.verifyBatchCertificate(root, row[0], row[1], row[2], row[3], row[4], proof);
+    const revokeRow = (signer: any, root: string, row: LeafRow, proof: string[]) =>
+      registry
+        .connect(signer)
+        .revokeBatchCertificate(root, row[0], row[1], row[2], row[3], row[4], proof);
+
+    beforeEach(async function () {
+      const now = await networkHelpers.time.latest();
+      rows = [
+        [makeCertHash("ubatch-c1"), "ipfs://uB1", "Gita Cohort", "BSc Computer Engineering", 0n],
+        [makeCertHash("ubatch-c2"), "ipfs://uB2", "Hari Cohort", "BSc Computer Engineering", BigInt(now + 3600)],
+        [makeCertHash("ubatch-c3"), "ipfs://uB3", "Ira Cohort", "MSc Computer Science", 0n],
+      ];
+      tree = StandardMerkleTree.of(rows, [...LEAF_TYPES]);
+      await registry.connect(issuer).batchIssue(tree.root);
+    });
+
+    it("returns VALID for a correct non-expiring batch certificate", async function () {
+      expect(await verifyRow(tree.root, rows[0], tree.getProof(0))).to.equal(Status.VALID);
+    });
+
+    it("returns NOT_FOUND for an unknown (never-issued) root", async function () {
+      const unknownRoot = makeCertHash("unified-unknown-root");
+      expect(await verifyRow(unknownRoot, rows[0], tree.getProof(0))).to.equal(Status.NOT_FOUND);
+    });
+
+    it("returns NOT_FOUND when a field is tampered (on-chain leaf reconstruction)", async function () {
+      // Valid proof for row 0, but an altered recipientName -> the on-chain leaf
+      // differs from the committed one, so membership fails. Proves the contract
+      // re-derives the leaf from raw fields rather than trusting them.
+      const tamperedRow: LeafRow = [rows[0][0], rows[0][1], "Mallory", rows[0][3], rows[0][4]];
+      expect(await verifyRow(tree.root, tamperedRow, tree.getProof(0))).to.equal(Status.NOT_FOUND);
+    });
+
+    it("returns EXPIRED once a batch cert's expiry has passed", async function () {
+      // Before expiry -> VALID.
+      expect(await verifyRow(tree.root, rows[1], tree.getProof(1))).to.equal(Status.VALID);
+
+      await networkHelpers.time.increaseTo(Number(rows[1][4]) + 1);
+      expect(await verifyRow(tree.root, rows[1], tree.getProof(1))).to.equal(Status.EXPIRED);
+    });
+
+    it("returns REVOKED after a batch cert is revoked", async function () {
+      await revokeRow(issuer, tree.root, rows[0], tree.getProof(0));
+      expect(await verifyRow(tree.root, rows[0], tree.getProof(0))).to.equal(Status.REVOKED);
+    });
+
+    it("returns REVOKED even past expiry (revocation overrides expiry)", async function () {
+      await revokeRow(issuer, tree.root, rows[1], tree.getProof(1));
+      await networkHelpers.time.increaseTo(Number(rows[1][4]) + 1);
+      expect(await verifyRow(tree.root, rows[1], tree.getProof(1))).to.equal(Status.REVOKED);
+    });
+
+    it("lets an admin revoke any batch certificate", async function () {
+      await revokeRow(deployer, tree.root, rows[0], tree.getProof(0));
+      expect(await verifyRow(tree.root, rows[0], tree.getProof(0))).to.equal(Status.REVOKED);
+    });
+
+    it("reverts NotAuthorizedToRevoke when an outsider revokes a batch cert", async function () {
+      await expect(revokeRow(outsider, tree.root, rows[0], tree.getProof(0)))
+        .to.be.revertedWithCustomError(registry, "NotAuthorizedToRevoke")
+        .withArgs(outsider.address, rows[0][0]);
+    });
+
+    it("reverts NotAuthorizedToRevoke for an issuer who is not the batch's issuer-of-record", async function () {
+      // A different authorized issuer must NOT be able to revoke another issuer's batch.
+      const otherIssuer = (await ethers.getSigners())[3];
+      await registry.connect(deployer).grantRole(ISSUER_ROLE, otherIssuer.address);
+
+      await expect(revokeRow(otherIssuer, tree.root, rows[0], tree.getProof(0)))
+        .to.be.revertedWithCustomError(registry, "NotAuthorizedToRevoke")
+        .withArgs(otherIssuer.address, rows[0][0]);
+    });
+
+    it("reverts CertificateNotFound when revoking against an unknown root", async function () {
+      const unknownRoot = makeCertHash("unified-unknown-root-revoke");
+      await expect(revokeRow(issuer, unknownRoot, rows[0], tree.getProof(0)))
+        .to.be.revertedWithCustomError(registry, "CertificateNotFound")
+        .withArgs(rows[0][0]);
+    });
+
+    it("reverts CertificateNotFound when the proof/fields don't prove membership", async function () {
+      const tamperedRow: LeafRow = [rows[0][0], rows[0][1], "Mallory", rows[0][3], rows[0][4]];
+      await expect(revokeRow(issuer, tree.root, tamperedRow, tree.getProof(0)))
+        .to.be.revertedWithCustomError(registry, "CertificateNotFound")
+        .withArgs(rows[0][0]);
+    });
+
+    it("reverts AlreadyRevoked when revoking the same batch cert twice", async function () {
+      await revokeRow(issuer, tree.root, rows[0], tree.getProof(0));
+      await expect(revokeRow(issuer, tree.root, rows[0], tree.getProof(0)))
+        .to.be.revertedWithCustomError(registry, "AlreadyRevoked")
+        .withArgs(rows[0][0]);
+    });
+  });
 });
