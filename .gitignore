@@ -24,3 +24,9 @@ npm-debug.log*
 .DS_Store
 Thumbs.db
 .vscode/
+
+# AI agent scaffolding shipped by Hardhat (not part of the project)
+.claude/
+.agents/
+AGENTS.md
+CLAUDE.md
