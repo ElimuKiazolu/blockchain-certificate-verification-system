@@ -3,7 +3,8 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "gas": "hardhat run scripts/gas-analysis.ts"
+    "gas": "hardhat run scripts/gas-analysis.ts",
+    "export-abi": "hardhat run scripts/export-abi.ts"
   },
   "devDependencies": {
     "@nomicfoundation/hardhat-ethers": "^4.0.13",
