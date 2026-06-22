@@ -517,4 +517,38 @@ describe("CertificateRegistry", function () {
         .withArgs(rows[0][0]);
     });
   });
+
+  describe("Naive batch (benchmark-only)", function () {
+    // batchIssueNaive is a gas-comparison baseline, not part of the verification story.
+    // These tests just confirm it stores normal single-cert records and is ISSUER-gated.
+    it("stores every certificate as a full single-cert record", async function () {
+      const hashes = [makeCertHash("naive-1"), makeCertHash("naive-2")];
+      const cids = ["ipfs://nB1", "ipfs://nB2"];
+      const names = ["Naive One", "Naive Two"];
+      const titles = ["BSc Computer Engineering", "MSc Computer Science"];
+      const expiries = [0n, 0n];
+
+      await registry.connect(issuer).batchIssueNaive(hashes, cids, names, titles, expiries);
+
+      for (let i = 0; i < hashes.length; i++) {
+        const stored = await registry.certificates(hashes[i]);
+        expect(stored.ipfsCID).to.equal(cids[i]);
+        expect(stored.issuer).to.equal(issuer.address);
+        expect(stored.recipientName).to.equal(names[i]);
+        expect(stored.courseTitle).to.equal(titles[i]);
+        const [status] = await registry.verifyCertificate(hashes[i]);
+        expect(status).to.equal(Status.VALID);
+      }
+    });
+
+    it("reverts for a non-issuer caller", async function () {
+      await expect(
+        registry
+          .connect(outsider)
+          .batchIssueNaive([makeCertHash("naive-x")], ["ipfs://x"], ["X"], ["T"], [0n]),
+      )
+        .to.be.revertedWithCustomError(registry, "AccessControlUnauthorizedAccount")
+        .withArgs(outsider.address, ISSUER_ROLE);
+    });
+  });
 });

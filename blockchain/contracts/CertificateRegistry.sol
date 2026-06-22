@@ -86,6 +86,9 @@ contract CertificateRegistry is AccessControl {
     /// @notice Thrown when batch-issuing a zero Merkle root.
     error EmptyRoot();
 
+    /// @notice BENCHMARK-ONLY: thrown when {batchIssueNaive}'s input arrays differ in length.
+    error LengthMismatch();
+
     /// @notice Emitted when a single certificate is issued.
     /// @param certHash The certificate hash (storage key).
     /// @param issuer The issuing address (holder of `ISSUER_ROLE`).
@@ -278,6 +281,57 @@ contract CertificateRegistry is AccessControl {
         batchRoots[merkleRoot] = Batch({issuer: msg.sender, issuedAt: uint64(block.timestamp)});
 
         emit BatchIssued(merkleRoot, msg.sender, uint64(block.timestamp));
+    }
+
+    /// @notice BENCHMARK-ONLY: naive batch issuance storing N full certificate records.
+    /// @dev NOT part of the production verification path. It exists solely to measure the
+    ///      gas baseline (the ShikkhaChain-style approach: one transaction, but N storage
+    ///      writes and N events) against the Merkle {batchIssue} for the Phase 3 gas-cost
+    ///      figure. It replicates {issueCertificate}'s per-certificate storage shape and
+    ///      guards in a loop, so every record it writes is a normal single-cert record.
+    ///      Do not use for real issuance — prefer {issueCertificate} or {batchIssue}.
+    /// @param certHashes The certificate hashes (storage keys).
+    /// @param ipfsCIDs The IPFS CIDs, one per certificate (each non-empty).
+    /// @param recipientNames The recipient names, one per certificate.
+    /// @param courseTitles The course titles, one per certificate.
+    /// @param expiresAtList The expiry timestamps (0 = never), one per certificate.
+    function batchIssueNaive(
+        bytes32[] calldata certHashes,
+        string[] calldata ipfsCIDs,
+        string[] calldata recipientNames,
+        string[] calldata courseTitles,
+        uint64[] calldata expiresAtList
+    ) external onlyRole(ISSUER_ROLE) {
+        uint256 n = certHashes.length;
+        if (
+            ipfsCIDs.length != n ||
+            recipientNames.length != n ||
+            courseTitles.length != n ||
+            expiresAtList.length != n
+        ) {
+            revert LengthMismatch();
+        }
+
+        for (uint256 i = 0; i < n; i++) {
+            bytes32 certHash = certHashes[i];
+            if (certificates[certHash].issuer != address(0)) {
+                revert CertificateAlreadyExists(certHash);
+            }
+            if (bytes(ipfsCIDs[i]).length == 0) {
+                revert EmptyCID();
+            }
+
+            certificates[certHash] = Certificate({
+                ipfsCID: ipfsCIDs[i],
+                issuer: msg.sender,
+                issuedAt: uint64(block.timestamp),
+                expiresAt: expiresAtList[i],
+                recipientName: recipientNames[i],
+                courseTitle: courseTitles[i]
+            });
+
+            emit CertificateIssued(certHash, msg.sender, ipfsCIDs[i], uint64(block.timestamp));
+        }
     }
 
     /// @notice Check whether a leaf belongs to an issued Merkle batch.
