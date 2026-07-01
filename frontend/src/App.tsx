@@ -1,13 +1,16 @@
 import { Header } from './components/Header'
 import { Footer } from './components/Footer'
+import { NetworkBanner } from './components/NetworkBanner'
+import { WalletCard } from './components/WalletCard'
 
 /**
- * App shell — Phase 4, Slice 1 (foundation only).
+ * App shell — Phase 4.
  *
  * Header + main content container + footer. No routing yet; the three future
  * surfaces (public verifier, issuer dashboard, admin — see
  * docs/03-User-Journeys-v2.md) are previewed below so the shell anticipates
- * them. Wallet connection and live contract reads arrive in Slice 2.
+ * them. Slice 2 adds the live wallet connection (WalletCard) with resilience
+ * states and a real on-chain role read.
  */
 
 type Surface = {
@@ -41,6 +44,7 @@ function App() {
   return (
     <div className="flex min-h-screen flex-col bg-slate-50 text-slate-900">
       <Header />
+      <NetworkBanner />
 
       <main className="mx-auto w-full max-w-5xl flex-1 px-6 py-12">
         <span className="inline-flex items-center rounded-full bg-indigo-50 px-3 py-1 text-xs font-medium text-indigo-700">
@@ -51,9 +55,13 @@ function App() {
           Tamper-proof academic certificates, verifiable in seconds.
         </h1>
         <p className="mt-3 max-w-2xl text-base text-slate-600">
-          The blockchain is the single source of truth. This is the application
-          shell; wallet connection and live on-chain reads are wired next.
+          The blockchain is the single source of truth. Connect a wallet below
+          to read your on-chain role live from the deployed registry.
         </p>
+
+        <div className="mt-8">
+          <WalletCard />
+        </div>
 
         <section className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {surfaces.map((surface) => (

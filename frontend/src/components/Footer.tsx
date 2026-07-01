@@ -2,11 +2,7 @@ import {
   CERTIFICATE_REGISTRY_ADDRESS,
   SEPOLIA_NETWORK,
 } from '../contract'
-
-/** Shorten an address for display: 0x1234…abcd */
-function shortenAddress(address: string) {
-  return `${address.slice(0, 6)}…${address.slice(-4)}`
-}
+import { shortenAddress } from '../lib/format'
 
 export function Footer() {
   const explorerUrl = `${SEPOLIA_NETWORK.blockExplorerUrl}/address/${CERTIFICATE_REGISTRY_ADDRESS}`
