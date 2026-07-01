@@ -1,0 +1,13 @@
+@import 'tailwindcss';
+
+/*
+ * Minimal base layer. Real visual identity (palette, typography, status
+ * colors) lands in Phase 5 per docs/04-UIUX-Brief-v2.md. For now: a clean,
+ * neutral institutional shell using Tailwind utilities.
+ */
+:root {
+  font-family:
+    Inter, system-ui, 'Segoe UI', Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
