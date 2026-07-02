@@ -1,10 +1,10 @@
-import { ConnectWalletButton } from './ConnectWalletButton'
+import { Link, NavLink } from 'react-router-dom'
 
 export function Header() {
   return (
     <header className="border-b border-slate-200 bg-white">
       <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
-        <div className="flex items-center gap-2.5">
+        <Link to="/" className="flex items-center gap-2.5">
           {/* Shield icon — "trust at a glance" (docs/04-UIUX-Brief-v2.md §2). */}
           <svg
             className="h-6 w-6 text-indigo-600"
@@ -22,8 +22,21 @@ export function Header() {
           <span className="text-lg font-semibold tracking-tight text-slate-900">
             Certificate Verification
           </span>
-        </div>
-        <ConnectWalletButton />
+        </Link>
+        <nav className="text-sm">
+          <NavLink
+            to="/wallet"
+            className={({ isActive }) =>
+              `rounded-md px-3 py-2 font-medium transition-colors ${
+                isActive
+                  ? 'text-indigo-700'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`
+            }
+          >
+            Issuer access
+          </NavLink>
+        </nav>
       </div>
     </header>
   )
