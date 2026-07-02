@@ -1,13 +1,72 @@
 @import 'tailwindcss';
 
 /*
- * Minimal base layer. Real visual identity (palette, typography, status
- * colors) lands in Phase 5 per docs/04-UIUX-Brief-v2.md. For now: a clean,
- * neutral institutional shell using Tailwind utilities.
+ * Design system — "Official Record" (Phase 5, Slice 2).
+ * Institutional infrastructure: authoritative, calm, credible.
+ *
+ * Typography: IBM Plex superfamily (self-hosted via @fontsource, imported in
+ * main.tsx) — Serif for display/wordmark, Sans for UI, Mono for on-chain data.
+ * Palette: a deep navy "ink" brand ramp on paper-white surfaces; semantic
+ * status colors are reserved for verdicts (see VerdictResult).
+ *
+ * Tokens live here in @theme so they generate real Tailwind utilities
+ * (bg-brand-600, text-brand-900, font-serif, bg-paper, …).
  */
-:root {
-  font-family:
-    Inter, system-ui, 'Segoe UI', Roboto, sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+@theme {
+  --font-sans: 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif;
+  --font-serif: 'IBM Plex Serif', ui-serif, Georgia, 'Times New Roman', serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, 'SF Mono', 'Cascadia Code',
+    monospace;
+
+  /* Brand — institutional navy ("ink") */
+  --color-brand-50: #eef3f8;
+  --color-brand-100: #d8e3ef;
+  --color-brand-200: #b3c7de;
+  --color-brand-300: #86a4c6;
+  --color-brand-400: #5b80a8;
+  --color-brand-500: #3d628b;
+  --color-brand-600: #2f4e70;
+  --color-brand-700: #28415c;
+  --color-brand-800: #24384e;
+  --color-brand-900: #1a2a3d;
+  --color-brand-950: #101b28;
+
+  /* Paper — page surface behind white cards */
+  --color-paper: #f4f6f9;
+}
+
+@layer base {
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+  body {
+    font-family: var(--font-sans);
+  }
+}
+
+/*
+ * One calm motion moment: verdict/result reveal (frontend-design skill —
+ * "one well-orchestrated moment"). Disabled under reduced-motion.
+ */
+@keyframes verdict-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-verdict {
+  animation: verdict-in 0.28s ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-verdict {
+    animation: none;
+  }
 }

@@ -5,56 +5,62 @@ import { formatDate, shortenAddress, shortenHash } from '../lib/format'
 
 /**
  * The verdict IS the interface (docs/04 §5). Each of the four on-chain states
- * gets a distinct color + icon + plain-language line; status colors are used
- * ONLY here so they carry meaning. NOT_FOUND is neutral slate — a real answer,
- * not an alarm. A read/RPC failure is a *different* component (ReadErrorNotice),
- * never this one, so "couldn't check" can never look like NOT FOUND.
+ * gets a distinct color + filled "seal" medallion + status badge + plain line;
+ * status colors are used ONLY here so they carry meaning. NOT_FOUND is neutral
+ * slate — a real answer, not an alarm. A read/RPC failure is a *different*
+ * component (ReadErrorNotice, orange, square icon), never this one, so
+ * "couldn't check" can never look like NOT FOUND.
  */
 interface VerdictConfig {
+  badge: string
   label: string
   tagline: string
   card: string // banner border + tint
-  chip: string // icon circle background
-  icon: string // icon stroke color
+  medallion: string // filled seal background
   heading: string // heading text color
+  badgeClass: string // status pill styling
   Icon: () => ReactNode
 }
 
 const VERDICTS: Record<CertStatus, VerdictConfig> = {
   VALID: {
+    badge: 'Verified',
     label: 'Valid certificate',
     tagline: 'This certificate is authentic and recorded on-chain.',
-    card: 'border-emerald-200 bg-emerald-50',
-    chip: 'bg-emerald-100',
-    icon: 'text-emerald-700',
+    card: 'border-emerald-200 bg-emerald-50/60',
+    medallion: 'bg-emerald-600',
     heading: 'text-emerald-900',
+    badgeClass: 'bg-emerald-100 text-emerald-800 ring-emerald-200',
     Icon: ShieldCheckIcon,
   },
   EXPIRED: {
+    badge: 'Expired',
     label: 'Certificate expired',
     tagline: 'This certificate was genuine but has passed its expiry date.',
-    card: 'border-amber-200 bg-amber-50',
-    chip: 'bg-amber-100',
-    icon: 'text-amber-700',
+    card: 'border-amber-200 bg-amber-50/60',
+    medallion: 'bg-amber-500',
     heading: 'text-amber-900',
+    badgeClass: 'bg-amber-100 text-amber-800 ring-amber-200',
     Icon: ClockIcon,
   },
   REVOKED: {
+    badge: 'Revoked',
     label: 'Certificate revoked',
     tagline: 'This certificate was revoked by the issuer and is no longer valid.',
-    card: 'border-red-200 bg-red-50',
-    chip: 'bg-red-100',
-    icon: 'text-red-700',
+    card: 'border-red-200 bg-red-50/60',
+    medallion: 'bg-red-600',
     heading: 'text-red-900',
+    badgeClass: 'bg-red-100 text-red-800 ring-red-200',
     Icon: RevokedIcon,
   },
   NOT_FOUND: {
+    badge: 'Not on record',
     label: 'No certificate found',
     tagline: 'No certificate matching this hash is recorded on-chain.',
-    card: 'border-slate-200 bg-slate-50',
-    chip: 'bg-slate-200',
-    icon: 'text-slate-600',
+    card: 'border-slate-300 bg-slate-50',
+    medallion: 'bg-slate-500',
     heading: 'text-slate-800',
+    badgeClass: 'bg-slate-200 text-slate-700 ring-slate-300',
     Icon: QuestionIcon,
   },
 }
@@ -76,18 +82,24 @@ export function VerdictResult({
 
   return (
     <div className="space-y-4">
-      {/* Verdict banner */}
+      {/* Verdict banner — seal + badge + label (never color alone: icon+text). */}
       <div className={`rounded-2xl border p-6 shadow-sm ${config.card}`}>
-        <div className="flex items-start gap-4">
+        <div className="flex items-start gap-4 sm:gap-5">
           <span
-            className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full ${config.chip} ${config.icon}`}
+            className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-full text-white shadow-sm ${config.medallion}`}
             aria-hidden="true"
           >
             <config.Icon />
           </span>
-          <div>
-            {/* Text label pairs with the icon + color — never color alone (a11y). */}
-            <h2 className={`text-2xl font-semibold tracking-tight ${config.heading}`}>
+          <div className="min-w-0">
+            <span
+              className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[0.7rem] font-semibold uppercase tracking-wider ring-1 ${config.badgeClass}`}
+            >
+              {config.badge}
+            </span>
+            <h2
+              className={`mt-2 font-serif text-2xl font-semibold tracking-tight ${config.heading}`}
+            >
               {config.label}
             </h2>
             <p className="mt-1 text-slate-600">{config.tagline}</p>
@@ -95,7 +107,7 @@ export function VerdictResult({
         </div>
       </div>
 
-      {/* Metadata — shown for existing certs only (docs/04 §5). */}
+      {/* Certificate details — existing certs only (docs/04 §5). */}
       {cert && (
         <dl className="grid gap-px overflow-hidden rounded-2xl border border-slate-200 bg-slate-200 sm:grid-cols-2">
           <Field label="Recipient" value={cert.recipientName || '—'} />
@@ -107,7 +119,7 @@ export function VerdictResult({
                 href={`${SEPOLIA_NETWORK.blockExplorerUrl}/address/${cert.issuer}`}
                 target="_blank"
                 rel="noreferrer"
-                className="font-mono text-indigo-600 hover:underline"
+                className="rounded-sm font-mono text-brand-600 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-400"
               >
                 {shortenAddress(cert.issuer)}
               </a>
@@ -126,7 +138,7 @@ export function VerdictResult({
                   href={`https://ipfs.io/ipfs/${cert.ipfsCID}`}
                   target="_blank"
                   rel="noreferrer"
-                  className="text-indigo-600 hover:underline"
+                  className="rounded-sm text-brand-600 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-400"
                 >
                   View file (IPFS)
                 </a>
@@ -136,40 +148,47 @@ export function VerdictResult({
         </dl>
       )}
 
-      {/* Trust signals — present for every verdict, incl. NOT_FOUND, so it's
-          clear the check was real and live on-chain. */}
-      <div className="rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-500">
-        <div className="flex items-center gap-2 font-medium text-slate-600">
-          <LockIcon />
-          Checked live on-chain · {SEPOLIA_NETWORK.name}
+      {/* On-chain proof — the trust signals, presented as credible evidence. */}
+      <div className="rounded-2xl border border-slate-200 bg-white p-5">
+        <div className="flex items-center gap-2 text-sm font-semibold text-brand-900">
+          <SealIcon />
+          On-chain proof
         </div>
-        <dl className="mt-2 space-y-1">
-          <div className="flex flex-wrap gap-x-2">
-            <dt className="text-slate-400">Hash</dt>
-            <dd className="font-mono text-slate-600" title={checkedHash}>
+        <p className="mt-1 text-xs text-slate-500">
+          Checked live against the deployed registry — no intermediary.
+        </p>
+        <dl className="mt-3 space-y-2 text-sm">
+          <ProofRow label="Network">
+            <span className="inline-flex items-center gap-1.5 text-slate-700">
+              <span
+                className="h-2 w-2 rounded-full bg-emerald-500"
+                aria-hidden="true"
+              />
+              {SEPOLIA_NETWORK.name} testnet
+            </span>
+          </ProofRow>
+          <ProofRow label="Contract">
+            <a
+              href={contractUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="rounded-sm font-mono text-brand-600 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-400"
+            >
+              {shortenAddress(CERTIFICATE_REGISTRY_ADDRESS)}
+            </a>
+          </ProofRow>
+          <ProofRow label="Hash">
+            <span className="font-mono text-slate-600" title={checkedHash}>
               {shortenHash(checkedHash)}
-            </dd>
-          </div>
-          <div className="flex flex-wrap gap-x-2">
-            <dt className="text-slate-400">Contract</dt>
-            <dd>
-              <a
-                href={contractUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="font-mono text-indigo-600 hover:underline"
-              >
-                {shortenAddress(CERTIFICATE_REGISTRY_ADDRESS)}
-              </a>
-            </dd>
-          </div>
+            </span>
+          </ProofRow>
         </dl>
       </div>
 
       <button
         type="button"
         onClick={onReset}
-        className="text-sm font-medium text-indigo-600 hover:text-indigo-700 hover:underline"
+        className="rounded-sm text-sm font-semibold text-brand-600 hover:text-brand-700 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-400"
       >
         ← Verify another certificate
       </button>
@@ -180,10 +199,21 @@ export function VerdictResult({
 function Field({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div className="bg-white px-4 py-3">
-      <dt className="text-xs font-medium uppercase tracking-wide text-slate-400">
+      <dt className="font-mono text-[0.7rem] font-medium uppercase tracking-wide text-slate-400">
         {label}
       </dt>
-      <dd className="mt-0.5 text-sm text-slate-800">{value}</dd>
+      <dd className="mt-1 text-sm break-words text-slate-800">{value}</dd>
+    </div>
+  )
+}
+
+function ProofRow({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="flex flex-wrap items-center gap-x-3">
+      <dt className="w-20 shrink-0 font-mono text-[0.7rem] uppercase tracking-wide text-slate-400">
+        {label}
+      </dt>
+      <dd>{children}</dd>
     </div>
   )
 }
@@ -193,7 +223,7 @@ function Field({ label, value }: { label: string; value: ReactNode }) {
 function ShieldCheckIcon() {
   return (
     <svg
-      className="h-6 w-6"
+      className="h-7 w-7"
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
@@ -210,7 +240,7 @@ function ShieldCheckIcon() {
 function ClockIcon() {
   return (
     <svg
-      className="h-6 w-6"
+      className="h-7 w-7"
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
@@ -227,7 +257,7 @@ function ClockIcon() {
 function RevokedIcon() {
   return (
     <svg
-      className="h-6 w-6"
+      className="h-7 w-7"
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
@@ -244,7 +274,7 @@ function RevokedIcon() {
 function QuestionIcon() {
   return (
     <svg
-      className="h-6 w-6"
+      className="h-7 w-7"
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
@@ -259,10 +289,10 @@ function QuestionIcon() {
   )
 }
 
-function LockIcon() {
+function SealIcon() {
   return (
     <svg
-      className="h-4 w-4 text-slate-400"
+      className="h-4 w-4 text-brand-500"
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
@@ -271,8 +301,9 @@ function LockIcon() {
       strokeLinejoin="round"
       aria-hidden="true"
     >
-      <rect x="4" y="11" width="16" height="9" rx="2" />
-      <path d="M8 11V7a4 4 0 0 1 8 0v4" />
+      <circle cx="12" cy="9" r="6" />
+      <path d="m9 14-1.5 7L12 19l4.5 2L15 14" />
+      <path d="m9.5 9 1.7 1.7L15 7" />
     </svg>
   )
 }

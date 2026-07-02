@@ -94,7 +94,7 @@ export function WalletCard() {
               href="https://metamask.io/download/"
               target="_blank"
               rel="noreferrer"
-              className="font-medium text-indigo-600 hover:underline"
+              className="font-medium text-brand-600 hover:underline"
             >
               Install it
             </a>{' '}
@@ -139,7 +139,7 @@ export function WalletCard() {
                 href={explorerUrl}
                 target="_blank"
                 rel="noreferrer"
-                className="font-mono text-indigo-600 hover:underline"
+                className="font-mono text-brand-600 hover:underline"
               >
                 {shortenAddress(CERTIFICATE_REGISTRY_ADDRESS)}
               </a>
