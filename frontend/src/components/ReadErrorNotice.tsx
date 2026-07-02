@@ -1,9 +1,12 @@
 /**
  * The read/RPC-failure state — deliberately DISTINCT from every verdict
- * (docs/07 §3: "couldn't check" ≠ NOT FOUND). It uses orange (a non-verdict
- * color — the four status colors are reserved for real verdicts), a warning
- * icon, and copy that states plainly this is a connection problem and the
- * status is *unknown*, not invalid or missing. Offers a safe retry.
+ * (docs/07 §3: "couldn't check" ≠ NOT FOUND). Distinguished three ways:
+ *   1. color   — orange (a non-verdict color; the four status colors are
+ *                reserved for real verdicts),
+ *   2. shape   — a square icon tile, where verdicts use round "seal" medallions,
+ *   3. copy    — it states plainly this is a connection problem and the status
+ *                is *unknown*, not invalid or missing.
+ * Offers a safe retry.
  */
 interface ReadErrorNoticeProps {
   message: string
@@ -13,15 +16,18 @@ interface ReadErrorNoticeProps {
 export function ReadErrorNotice({ message, onRetry }: ReadErrorNoticeProps) {
   return (
     <div className="rounded-2xl border border-orange-300 bg-orange-50 p-6 shadow-sm">
-      <div className="flex items-start gap-4">
+      <div className="flex items-start gap-4 sm:gap-5">
         <span
-          className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-orange-100 text-orange-700"
+          className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-orange-100 text-orange-700 ring-1 ring-orange-200"
           aria-hidden="true"
         >
           <AlertIcon />
         </span>
-        <div>
-          <h2 className="text-2xl font-semibold tracking-tight text-orange-900">
+        <div className="min-w-0">
+          <span className="inline-flex items-center rounded-full bg-orange-100 px-2.5 py-0.5 text-[0.7rem] font-semibold uppercase tracking-wider text-orange-800 ring-1 ring-orange-200">
+            Connection issue
+          </span>
+          <h2 className="mt-2 font-serif text-2xl font-semibold tracking-tight text-orange-900">
             Couldn&apos;t verify right now
           </h2>
           <p className="mt-1 text-orange-800">
@@ -35,12 +41,14 @@ export function ReadErrorNotice({ message, onRetry }: ReadErrorNoticeProps) {
           <button
             type="button"
             onClick={onRetry}
-            className="mt-4 rounded-lg bg-orange-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-orange-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-600"
+            className="mt-4 inline-flex min-h-11 items-center rounded-xl bg-orange-600 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-orange-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-600"
           >
             Retry
           </button>
           {message && (
-            <p className="mt-3 text-xs text-orange-600/80">Details: {message}</p>
+            <p className="mt-3 font-mono text-xs break-words text-orange-600/80">
+              Details: {message}
+            </p>
           )}
         </div>
       </div>
@@ -51,7 +59,7 @@ export function ReadErrorNotice({ message, onRetry }: ReadErrorNoticeProps) {
 function AlertIcon() {
   return (
     <svg
-      className="h-6 w-6"
+      className="h-7 w-7"
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"

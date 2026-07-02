@@ -16,10 +16,10 @@ export function WalletPage() {
       <section className="mx-auto w-full max-w-5xl px-6 py-12">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
-            <span className="inline-flex items-center rounded-full bg-indigo-50 px-3 py-1 text-xs font-medium text-indigo-700">
+            <span className="inline-flex items-center font-mono text-xs uppercase tracking-[0.18em] text-brand-600">
               Issuer &amp; admin access
             </span>
-            <h1 className="mt-4 text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
+            <h1 className="mt-3 font-serif text-3xl font-semibold tracking-tight text-brand-900 sm:text-4xl">
               Connect your wallet
             </h1>
             <p className="mt-3 max-w-2xl text-base text-slate-600">
