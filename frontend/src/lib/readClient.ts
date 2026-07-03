@@ -57,6 +57,35 @@ export function isValidCertHash(input: string): boolean {
   return CERT_HASH_RE.test(input.trim())
 }
 
+/** Matches a bytes32 hash anywhere in a string (e.g. embedded in a URL). */
+const CERT_HASH_ANYWHERE_RE = /0x[0-9a-fA-F]{64}/
+
+/**
+ * Resolve a QR payload to a certificate hash. The QR carries either the raw
+ * hash or a verification URL containing it (docs/03 A1: "The QR is a
+ * verification URL"). Tries, in order: (1) the whole payload is already a
+ * valid hash, (2) a `hash` query param, (3) a bytes32-shaped substring
+ * anywhere in the text (covers a path-embedded hash or any other shape).
+ * Returns null when nothing hash-shaped is found — the caller must treat that
+ * as "malformed QR," never as NOT_FOUND (a malformed payload was never
+ * checked on-chain at all).
+ */
+export function extractCertHash(payload: string): string | null {
+  const trimmed = payload.trim()
+  if (isValidCertHash(trimmed)) return trimmed
+
+  try {
+    const url = new URL(trimmed)
+    const param = url.searchParams.get('hash')
+    if (param && isValidCertHash(param)) return param
+  } catch {
+    // Not a URL — fall through to the substring search below.
+  }
+
+  const match = trimmed.match(CERT_HASH_ANYWHERE_RE)
+  return match ? match[0] : null
+}
+
 /** Reject if the underlying read hasn't settled within `ms` (docs/07 R2). */
 function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   return new Promise<T>((resolve, reject) => {
