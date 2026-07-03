@@ -39,7 +39,7 @@ export function Header() {
         </Link>
         <nav className="text-sm">
           <NavLink
-            to="/wallet"
+            to="/issuer"
             className={({ isActive }) =>
               `inline-flex min-h-11 items-center rounded-md px-3 py-2 font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-300 ${
                 isActive
