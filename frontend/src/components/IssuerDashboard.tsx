@@ -1,15 +1,21 @@
 import { describeRoles } from '../wallet/useRoleRead'
 import { shortenAddress } from '../lib/format'
+import { CERTIFICATE_REGISTRY_ADDRESS } from '../contract'
 import type { RoleReadResult } from '../lib/contract'
+import { IssueCertificateForm } from './IssueCertificateForm'
 
 /**
- * The authorized issuer dashboard shell (Phase 6, Slice 1). Rendered only
- * inside {@link RequireIssuer}, so it can assume the wallet is connected, on
- * Sepolia, and holds issuer/admin.
+ * The authorized issuer dashboard shell. Rendered only inside
+ * {@link RequireIssuer}, so it can assume the wallet is connected, on
+ * Sepolia, and holds issuer OR admin.
  *
- * This slice is gating only — the "Issue a certificate" area is a clearly
- * marked placeholder. Slice 2 replaces it with the real single-issuance form
- * (recipient / course / expiry / file → SHA-256 → the first on-chain WRITE).
+ * That gate is deliberately broader than what the CONTRACT allows: on-chain,
+ * `issueCertificate` is `onlyRole(ISSUER_ROLE)` specifically (verified in
+ * blockchain/contracts/CertificateRegistry.sol) — admin alone cannot call it
+ * (the constructor only grants DEFAULT_ADMIN_ROLE to the deployer, never
+ * ISSUER_ROLE). So this component re-checks `data.isIssuer` before rendering
+ * the real write form; an admin-only wallet gets a distinct explainer instead
+ * of a form that would just revert on submit.
  */
 export function IssuerDashboard({
   data,
@@ -42,12 +48,9 @@ export function IssuerDashboard({
           </span>
           <div>
             <p className="text-sm font-semibold text-emerald-900">
-              Authorized to issue certificates
+              Authorized to access the issuer dashboard
             </p>
-            <p
-              className="font-mono text-xs text-emerald-700"
-              title={account}
-            >
+            <p className="font-mono text-xs text-emerald-700" title={account}>
               {shortenAddress(account)}
             </p>
           </div>
@@ -55,51 +58,94 @@ export function IssuerDashboard({
         <RoleBadge data={data} />
       </div>
 
-      {/* Placeholder "Issue a certificate" area — NOT functional this slice. */}
-      <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 className="font-serif text-xl font-semibold text-brand-900">
-            Issue a certificate
-          </h2>
-          <span className="inline-flex items-center rounded-full border border-brand-200 bg-brand-50 px-2.5 py-1 font-mono text-[0.65rem] uppercase tracking-[0.14em] text-brand-600">
-            Coming next
-          </span>
-        </div>
-        <p className="mt-2 max-w-2xl text-sm leading-relaxed text-slate-600">
-          Single-certificate issuance arrives in the next slice: enter the
-          recipient, course, and an optional expiry, then attach the file whose
-          SHA-256 becomes the on-chain certificate hash. This will be the first
-          on-chain <strong>write</strong> from the app — after it confirms,
-          you&apos;ll get the hash and a QR that drops straight into the public
-          verifier.
-        </p>
+      {data.isIssuer ? (
+        <IssueCertificateForm />
+      ) : (
+        <NeedsIssuerRolePanel account={account} />
+      )}
+    </div>
+  )
+}
 
-        {/* Disabled sketch of the form — signals what's coming without faking it. */}
-        <div className="mt-5 space-y-3" aria-hidden="true">
-          <SkeletonField label="Recipient name" />
-          <SkeletonField label="Course / title" />
-          <SkeletonField label="Expiry date (optional)" />
-          <SkeletonField label="Certificate file" tall />
-        </div>
-
-        <button
-          type="button"
-          disabled
-          className="mt-5 inline-flex cursor-not-allowed items-center gap-2 rounded-xl bg-slate-200 px-6 py-2.5 text-sm font-semibold text-slate-500"
-          title="Available in the next slice"
+/**
+ * Admin-but-not-issuer: they can SEE the dashboard, but issueCertificate
+ * reverts without ISSUER_ROLE. There's no admin panel yet (that's a later
+ * journey — docs/03 C2), so the self-service path today is the deployed
+ * contract's own Write Contract tab on Etherscan, using the admin wallet.
+ */
+function NeedsIssuerRolePanel({ account }: { account: string }) {
+  return (
+    <div className="rounded-2xl border border-amber-200 bg-amber-50/70 p-6 shadow-sm sm:p-8">
+      <div className="flex items-start gap-4">
+        <span
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-700"
+          aria-hidden="true"
         >
-          Issue certificate
-        </button>
-        <p className="mt-2 text-xs text-slate-400">
-          Disabled — no transactions are sent in this build.
-        </p>
+          <svg
+            className="h-6 w-6"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={1.8}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M12 9v4" />
+            <path d="M12 17h.01" />
+            <path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z" />
+          </svg>
+        </span>
+        <div>
+          <h2 className="font-serif text-xl font-semibold text-amber-900">
+            This wallet needs ISSUER_ROLE to issue
+          </h2>
+          <p className="mt-2 max-w-xl text-sm leading-relaxed text-slate-700">
+            <span className="font-mono" title={account}>
+              {shortenAddress(account)}
+            </span>{' '}
+            holds <strong>administrator</strong> access, but the contract
+            requires <strong>ISSUER_ROLE specifically</strong> to call{' '}
+            <code className="rounded bg-white px-1 py-0.5 font-mono text-xs">
+              issueCertificate
+            </code>
+            . Administrators aren&apos;t granted it automatically.
+          </p>
+          <div className="mt-4 max-w-xl rounded-xl border border-amber-200 bg-white p-4 text-sm text-slate-700">
+            <p className="font-semibold text-slate-800">
+              As an admin, you can grant it to yourself:
+            </p>
+            <ol className="mt-2 list-decimal space-y-1 pl-4">
+              <li>
+                Open the contract on{' '}
+                <a
+                  href={`https://sepolia.etherscan.io/address/${CERTIFICATE_REGISTRY_ADDRESS}#writeContract`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="font-medium text-brand-600 hover:underline"
+                >
+                  Etherscan → Write Contract
+                </a>{' '}
+                and connect this same admin wallet.
+              </li>
+              <li>
+                Copy the value from the <code>ISSUER_ROLE</code> read-only
+                function (under Read Contract).
+              </li>
+              <li>
+                Call <code>grantRole</code> with that value as{' '}
+                <code>role</code> and your address as{' '}
+                <code>account</code>.
+              </li>
+              <li>Reload this page once the transaction confirms.</li>
+            </ol>
+          </div>
+        </div>
       </div>
     </div>
   )
 }
 
 function RoleBadge({ data }: { data: RoleReadResult }) {
-  // Admin ramp reads as "higher" authority; issuer as operational.
   const tone = data.isAdmin
     ? 'border-brand-200 bg-brand-50 text-brand-700'
     : 'border-emerald-200 bg-emerald-50 text-emerald-700'
@@ -110,18 +156,5 @@ function RoleBadge({ data }: { data: RoleReadResult }) {
       <span className="h-1.5 w-1.5 rounded-full bg-current" aria-hidden="true" />
       {describeRoles(data)}
     </span>
-  )
-}
-
-function SkeletonField({ label, tall }: { label: string; tall?: boolean }) {
-  return (
-    <div>
-      <span className="block text-xs font-medium text-slate-400">{label}</span>
-      <div
-        className={`mt-1 rounded-lg border border-dashed border-slate-200 bg-slate-50 ${
-          tall ? 'h-16' : 'h-10'
-        }`}
-      />
-    </div>
   )
 }
