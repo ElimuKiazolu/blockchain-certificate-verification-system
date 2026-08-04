@@ -1,9 +1,9 @@
 import { useRef, useState, type ChangeEvent } from 'react'
 import {
-  parseBatchBundle,
   describeBundleMismatch,
   type BatchCertificateInput,
 } from '../lib/batchVerify'
+import { parseBulkInput } from '../lib/bulkVerify'
 import { shortenHash } from '../lib/format'
 
 /**
@@ -18,6 +18,8 @@ import { shortenHash } from '../lib/format'
  */
 interface BatchVerifyPanelProps {
   onRecordReady: (record: BatchCertificateInput) => void
+  /** Slice 3c: verify every member of the loaded bundle in one run. */
+  onVerifyAll: (members: BatchCertificateInput[]) => void
   busy: boolean
   /** A record recovered from a scanned QR or a ?batch= link, pre-loaded here. */
   prefill?: { records: BatchCertificateInput[]; source: string }
@@ -25,6 +27,7 @@ interface BatchVerifyPanelProps {
 
 export function BatchVerifyPanel({
   onRecordReady,
+  onVerifyAll,
   busy,
   prefill,
 }: BatchVerifyPanelProps) {
@@ -34,19 +37,25 @@ export function BatchVerifyPanel({
   )
   const [source, setSource] = useState<string | null>(prefill?.source ?? null)
   const [error, setError] = useState<string | null>(null)
+  const [warnings, setWarnings] = useState<string[]>([])
   const [selected, setSelected] = useState(0)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
+  // Slice 3c widened this from JSON-only to "JSON bundle or 3a's CSV export",
+  // normalizing both to the same member list. The single-member path below is
+  // unchanged — it just reads the first/selected entry of that list.
   function load(raw: string, from: string) {
-    const result = parseBatchBundle(raw)
+    const result = parseBulkInput(raw)
     if (result.error) {
       setError(result.error)
+      setWarnings([])
       setRecords([])
       setSource(null)
       return
     }
     setError(null)
-    setRecords(result.records)
+    setWarnings(result.warnings)
+    setRecords(result.members)
     setSource(from)
     setSelected(0)
   }
@@ -73,17 +82,17 @@ export function BatchVerifyPanel({
           onClick={() => fileInputRef.current?.click()}
           className="inline-flex min-h-11 items-center rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-brand-700 shadow-sm transition-colors hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500"
         >
-          Choose bundle file (.json)
+          Choose bundle file (.json or .csv)
         </button>
         {source && <span className="text-sm text-slate-500">{source}</span>}
       </div>
       <input
         ref={fileInputRef}
         type="file"
-        accept=".json,application/json"
+        accept=".json,application/json,.csv,text/csv"
         onChange={(e) => void onFileChange(e)}
         className="sr-only"
-        aria-label="Certificate bundle JSON file"
+        aria-label="Certificate bundle file"
       />
 
       <label className="mt-4 block">
@@ -100,8 +109,9 @@ export function BatchVerifyPanel({
           className="mt-1.5 block w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 font-mono text-xs text-slate-900 shadow-sm outline-none transition-colors placeholder:text-slate-400 focus:border-brand-500 focus:ring-4 focus:ring-brand-100"
         />
         <span className="mt-1 block text-xs text-slate-500">
-          The whole issued bundle, or just your own entry from it. The proof
-          travels with your certificate — nothing is looked up on a server.
+          The whole issued bundle (JSON or the CSV export), or just your own
+          entry from it. The proof travels with your certificate — nothing is
+          looked up on a server.
         </span>
       </label>
 
@@ -124,10 +134,42 @@ export function BatchVerifyPanel({
         </p>
       )}
 
+      {warnings.map((warning) => (
+        <p
+          key={warning}
+          className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800"
+        >
+          {warning}
+        </p>
+      ))}
+
+      {/* Slice 3c: the cohort-level action. Offered first because a registrar
+          checking a class wants the whole answer, not 200 single lookups —
+          but the single-member path below is untouched and still available. */}
+      {records.length > 1 && (
+        <div className="mt-4 rounded-xl border border-brand-200 bg-brand-50 p-4">
+          <p className="text-sm font-semibold text-brand-900">
+            Verify the whole cohort
+          </p>
+          <p className="mt-0.5 text-sm text-brand-800">
+            Check all {records.length} certificates in this bundle against the
+            registry in one run, and download a report.
+          </p>
+          <button
+            type="button"
+            onClick={() => onVerifyAll(records)}
+            disabled={busy}
+            className="mt-3 inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-brand-600 px-6 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-brand-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            Verify all {records.length}
+          </button>
+        </div>
+      )}
+
       {records.length > 1 && (
         <label className="mt-4 block">
           <span className="text-sm font-semibold text-slate-800">
-            Which certificate? ({records.length} in this bundle)
+            Or check just one ({records.length} in this bundle)
           </span>
           <select
             value={selected}
