@@ -69,12 +69,19 @@ interface VerdictResultProps {
   result: VerifyResult
   checkedHash: string
   onReset: () => void
+  /**
+   * Present only for a BATCH certificate (Phase 6, Slice 3b): the certificate
+   * was proven to be a member of this Merkle root rather than looked up by
+   * hash. Optional and purely additive — single-cert rendering is unchanged.
+   */
+  batch?: { root: string }
 }
 
 export function VerdictResult({
   result,
   checkedHash,
   onReset,
+  batch,
 }: VerdictResultProps) {
   const config = VERDICTS[result.status]
   const cert = result.certificate
@@ -106,6 +113,48 @@ export function VerdictResult({
           </div>
         </div>
       </div>
+
+      {/* Batch NOT_FOUND is genuinely ambiguous — the contract returns it both
+          for an unknown root and for a leaf that doesn't reproduce. Say which
+          possibilities exist instead of implying "forged". */}
+      {batch && result.status === 'NOT_FOUND' && (
+        <div className="rounded-2xl border border-slate-200 bg-white p-5 text-sm text-slate-600">
+          <p className="font-semibold text-slate-800">
+            What this means for a batch certificate
+          </p>
+          <p className="mt-1">
+            The registry could not match these details to the batch root
+            supplied. That happens when:
+          </p>
+          <ul className="mt-2 list-disc space-y-1 pl-5">
+            <li>this batch was never issued on this registry, or</li>
+            <li>
+              the certificate isn&apos;t a member of it, or
+            </li>
+            <li>
+              any detail — name, course, expiry, document reference — differs
+              from what was issued, even by one character.
+            </li>
+          </ul>
+          <p className="mt-2">
+            Every field is part of the on-chain fingerprint, so an edited
+            bundle cannot produce a match.
+          </p>
+        </div>
+      )}
+
+      {/* A REVOKED certificate still carries its full record: the contract
+          returns the populated Certificate struct alongside Status.REVOKED,
+          and the batch path reproves the same fields. Showing them is the
+          point — a verifier needs to see WHAT was revoked, not just that
+          something was (docs/03 B4: the record is preserved, not deleted). */}
+      {result.status === 'REVOKED' && cert && (
+        <p className="rounded-2xl border border-red-200 bg-white px-5 py-4 text-sm text-slate-600">
+          The certificate below was genuinely issued and remains on the
+          permanent record — it has since been withdrawn by its issuer, so it
+          can no longer be relied on.
+        </p>
+      )}
 
       {/* Certificate details — existing certs only (docs/04 §5). */}
       {cert && (
@@ -182,7 +231,22 @@ export function VerdictResult({
               {shortenHash(checkedHash)}
             </span>
           </ProofRow>
+          {batch && (
+            <ProofRow label="Batch root">
+              <span className="font-mono text-slate-600" title={batch.root}>
+                {shortenHash(batch.root)}
+              </span>
+            </ProofRow>
+          )}
         </dl>
+        {batch && (
+          <p className="mt-3 border-t border-slate-100 pt-3 text-xs text-slate-500">
+            Batch certificate — one Merkle root commits the whole cohort.
+            {cert
+              ? ' The registry recomputed this certificate’s leaf from the details above and matched it against that root, so those details are what was issued.'
+              : ' The proof was checked on-chain against that root.'}
+          </p>
+        )}
       </div>
 
       <button

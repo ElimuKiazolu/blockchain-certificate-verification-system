@@ -1,4 +1,5 @@
 import { Link, NavLink } from 'react-router-dom'
+import type { ReactNode } from 'react'
 
 /**
  * Institutional header — a deep navy "portal" bar. Serif wordmark for
@@ -37,21 +38,37 @@ export function Header() {
             </span>
           </span>
         </Link>
-        <nav className="text-sm">
-          <NavLink
-            to="/wallet"
-            className={({ isActive }) =>
-              `inline-flex min-h-11 items-center rounded-md px-3 py-2 font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-300 ${
-                isActive
-                  ? 'bg-white/10 text-white'
-                  : 'text-brand-100 hover:bg-white/5 hover:text-white'
-              }`
-            }
-          >
-            Issuer access
-          </NavLink>
+        <nav className="flex items-center gap-1 text-sm">
+          {/* Always visible, always gated at the route. Showing /admin only to
+              admins would mean reading roles from the header on every page —
+              including the public verifier, which must stay wallet-free for
+              anonymous visitors. A link that explains why it's locked is
+              better than a header that quietly needs a wallet. */}
+          <HeaderNavLink to="/">Verify</HeaderNavLink>
+          <HeaderNavLink to="/issuer">Issuer</HeaderNavLink>
+          <HeaderNavLink to="/admin">Admin</HeaderNavLink>
+          <HeaderNavLink to="/wallet">Wallet</HeaderNavLink>
         </nav>
       </div>
     </header>
+  )
+}
+
+/** One consistent nav link style, active-state aware (react-router v7 NavLink). */
+function HeaderNavLink({ to, children }: { to: string; children: ReactNode }) {
+  return (
+    <NavLink
+      to={to}
+      end={to === '/'}
+      className={({ isActive }) =>
+        `inline-flex min-h-11 items-center rounded-md px-3 py-2 font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-300 ${
+          isActive
+            ? 'bg-white/10 text-white'
+            : 'text-brand-100 hover:bg-white/5 hover:text-white'
+        }`
+      }
+    >
+      {children}
+    </NavLink>
   )
 }

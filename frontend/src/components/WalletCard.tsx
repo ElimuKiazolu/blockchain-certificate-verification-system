@@ -1,64 +1,17 @@
-import { useCallback, useEffect, useState, type ReactNode } from 'react'
+import { type ReactNode } from 'react'
 import { useWallet } from '../wallet/context'
-import { getEthereum, getErrorMessage } from '../wallet/ethereum'
-import { readWalletRoles, type RoleReadResult } from '../lib/contract'
+import { useRoleRead, describeRoles } from '../wallet/useRoleRead'
 import { shortenAddress } from '../lib/format'
 import {
   CERTIFICATE_REGISTRY_ADDRESS,
   SEPOLIA_NETWORK,
 } from '../contract'
 
-/** Local state for the on-chain role read. */
-type ReadState =
-  | { status: 'idle' }
-  | { status: 'loading' }
-  | { status: 'success'; data: RoleReadResult }
-  | { status: 'error'; message: string }
-
-function describeRoles(data: RoleReadResult): string {
-  if (data.isAdmin && data.isIssuer) return 'Administrator + Issuer'
-  if (data.isAdmin) return 'Administrator'
-  if (data.isIssuer) return 'Issuer'
-  return 'No role'
-}
-
 export function WalletCard() {
   const { status, account, chainId, isCorrectNetwork, error, clearError } =
     useWallet()
-  const [read, setRead] = useState<ReadState>({ status: 'idle' })
-  const [reloadKey, setReloadKey] = useState(0)
-
-  const retry = useCallback(() => setReloadKey((k) => k + 1), [])
-
-  const canRead = status === 'connected' && isCorrectNetwork && account !== null
-
-  useEffect(() => {
-    if (!canRead || account === null) {
-      setRead({ status: 'idle' })
-      return
-    }
-    const eth = getEthereum()
-    if (!eth) {
-      setRead({ status: 'error', message: 'MetaMask provider unavailable.' })
-      return
-    }
-
-    let cancelled = false
-    setRead({ status: 'loading' })
-    readWalletRoles(eth, account)
-      .then((data) => {
-        if (!cancelled) setRead({ status: 'success', data })
-      })
-      .catch((err: unknown) => {
-        if (!cancelled) {
-          setRead({ status: 'error', message: getErrorMessage(err) })
-        }
-      })
-
-    return () => {
-      cancelled = true
-    }
-  }, [canRead, account, reloadKey])
+  // Shared role-read state machine (also drives the /issuer gate) — one path.
+  const { state: read, retry } = useRoleRead()
 
   const explorerUrl = `${SEPOLIA_NETWORK.blockExplorerUrl}/address/${CERTIFICATE_REGISTRY_ADDRESS}`
 
