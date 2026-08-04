@@ -143,6 +143,19 @@ export function VerdictResult({
         </div>
       )}
 
+      {/* A REVOKED certificate still carries its full record: the contract
+          returns the populated Certificate struct alongside Status.REVOKED,
+          and the batch path reproves the same fields. Showing them is the
+          point — a verifier needs to see WHAT was revoked, not just that
+          something was (docs/03 B4: the record is preserved, not deleted). */}
+      {result.status === 'REVOKED' && cert && (
+        <p className="rounded-2xl border border-red-200 bg-white px-5 py-4 text-sm text-slate-600">
+          The certificate below was genuinely issued and remains on the
+          permanent record — it has since been withdrawn by its issuer, so it
+          can no longer be relied on.
+        </p>
+      )}
+
       {/* Certificate details — existing certs only (docs/04 §5). */}
       {cert && (
         <dl className="grid gap-px overflow-hidden rounded-2xl border border-slate-200 bg-slate-200 sm:grid-cols-2">

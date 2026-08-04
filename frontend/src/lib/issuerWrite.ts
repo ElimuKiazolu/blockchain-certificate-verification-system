@@ -52,6 +52,15 @@ const REVERT_MESSAGES: Record<string, string> = {
     'A batch with this exact Merkle root has already been issued — the cohort may have been submitted already.',
   EmptyRoot:
     'The computed Merkle root is empty. Add at least one valid certificate row before issuing.',
+  AlreadyRevoked:
+    'This certificate has already been revoked. Nothing further is needed — it already shows as REVOKED on the verifier.',
+  NotAuthorizedToRevoke:
+    'This wallet is not allowed to revoke this certificate. Only the issuer that recorded it, or a registry administrator, can revoke it.',
+  // Thrown by revokeCertificate when the hash was never issued, and by
+  // revokeBatchCertificate for BOTH an unknown root and a proof that doesn't
+  // reproduce the committed leaf — so the wording has to cover all three.
+  CertificateNotFound:
+    'The registry has no record matching this. Either it was never issued, or — for a batch certificate — one of the details differs from what was issued (every field is part of the on-chain fingerprint).',
 }
 
 /** Classify a thrown error into a plain-language, user-safe message. */
@@ -122,4 +131,83 @@ export async function batchIssue(
     signer,
   )
   return (await contract.batchIssue(merkleRoot)) as ContractTransactionResponse
+}
+
+/**
+ * Revoke a SINGLE-issued certificate.
+ *
+ * ABI (confirmed from blockchain/exports/CertificateRegistry.json):
+ *   revokeCertificate(bytes32 certHash)
+ *
+ * Authorization is NOT a role check: the contract requires
+ * `msg.sender == cert.issuer || hasRole(DEFAULT_ADMIN_ROLE, msg.sender)`.
+ * So an ISSUER_ROLE wallet that did not issue this particular certificate
+ * cannot revoke it, while an admin who holds no issuer role can. The UI can't
+ * fully predict this, so it explains a `NotAuthorizedToRevoke` revert rather
+ * than pre-blocking the button (see REVERT_MESSAGES).
+ */
+export async function revokeCertificate(
+  ethereum: Eip1193Provider,
+  certHash: string,
+): Promise<ContractTransactionResponse> {
+  const provider = new BrowserProvider(ethereum)
+  const signer = await provider.getSigner()
+  const contract = new Contract(
+    CERTIFICATE_REGISTRY_ADDRESS,
+    CERTIFICATE_REGISTRY_ABI,
+    signer,
+  )
+  return (await contract.revokeCertificate(
+    certHash,
+  )) as ContractTransactionResponse
+}
+
+/** The fields needed to revoke one member of a Merkle batch. */
+export interface RevokeBatchCertificateInput {
+  root: string
+  certHash: string
+  ipfsCID: string
+  recipientName: string
+  courseTitle: string
+  /** Unix seconds; 0 = never expires. */
+  expiresAt: number
+  proof: string[]
+}
+
+/**
+ * Revoke ONE member of a Merkle batch.
+ *
+ * ABI (confirmed from blockchain/exports/CertificateRegistry.json):
+ *   revokeBatchCertificate(bytes32 merkleRoot, bytes32 certHash,
+ *     string ipfsCID, string recipientName, string courseTitle,
+ *     uint64 expiresAt, bytes32[] proof)
+ *
+ * Identical parameter order to `verifyBatchCertificate` — the contract
+ * re-proves Merkle membership with `_computeLeaf` before touching the revoked
+ * set, so every field must arrive VERBATIM (notably ipfsCID; see the
+ * field-fidelity note in batchVerify.ts). A single altered character makes the
+ * leaf miss and reverts with CertificateNotFound rather than revoking.
+ *
+ * Authorization is scoped to the BATCH's issuer-of-record, or an admin.
+ */
+export async function revokeBatchCertificate(
+  ethereum: Eip1193Provider,
+  input: RevokeBatchCertificateInput,
+): Promise<ContractTransactionResponse> {
+  const provider = new BrowserProvider(ethereum)
+  const signer = await provider.getSigner()
+  const contract = new Contract(
+    CERTIFICATE_REGISTRY_ADDRESS,
+    CERTIFICATE_REGISTRY_ABI,
+    signer,
+  )
+  return (await contract.revokeBatchCertificate(
+    input.root,
+    input.certHash,
+    input.ipfsCID,
+    input.recipientName,
+    input.courseTitle,
+    BigInt(input.expiresAt),
+    input.proof,
+  )) as ContractTransactionResponse
 }

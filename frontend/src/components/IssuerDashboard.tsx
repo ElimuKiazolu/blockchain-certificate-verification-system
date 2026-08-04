@@ -5,19 +5,28 @@ import { CERTIFICATE_REGISTRY_ADDRESS } from '../contract'
 import type { RoleReadResult } from '../lib/contract'
 import { IssueCertificateForm } from './IssueCertificateForm'
 import { BatchIssueForm } from './BatchIssueForm'
+import { RevokeCertificateForm } from './RevokeCertificateForm'
 
 /**
  * The authorized issuer dashboard shell. Rendered only inside
  * {@link RequireIssuer}, so it can assume the wallet is connected, on
  * Sepolia, and holds issuer OR admin.
  *
- * That gate is deliberately broader than what the CONTRACT allows: on-chain,
- * `issueCertificate` is `onlyRole(ISSUER_ROLE)` specifically (verified in
- * blockchain/contracts/CertificateRegistry.sol) — admin alone cannot call it
- * (the constructor only grants DEFAULT_ADMIN_ROLE to the deployer, never
- * ISSUER_ROLE). So this component re-checks `data.isIssuer` before rendering
- * the real write form; an admin-only wallet gets a distinct explainer instead
- * of a form that would just revert on submit.
+ * That gate is deliberately broader than what the CONTRACT allows, and the two
+ * actions here differ in who may perform them:
+ *
+ *   ISSUE  — `issueCertificate` is `onlyRole(ISSUER_ROLE)` specifically, so an
+ *            admin alone CANNOT issue (the constructor grants the deployer
+ *            DEFAULT_ADMIN_ROLE only, never ISSUER_ROLE). `data.isIssuer` is
+ *            re-checked before rendering the form; an admin-only wallet gets a
+ *            distinct explainer rather than a form that would revert.
+ *
+ *   REVOKE — not a role check at all: the contract requires
+ *            `msg.sender == issuer-of-record || DEFAULT_ADMIN_ROLE`. So an
+ *            admin without ISSUER_ROLE genuinely CAN revoke, while an issuer
+ *            can only revoke what it issued. The Revoke tab is therefore open
+ *            to everyone this gate admits, and a wallet that doesn't qualify
+ *            for a particular certificate learns so from the revert.
  */
 export function IssuerDashboard({
   data,
@@ -60,12 +69,95 @@ export function IssuerDashboard({
         <RoleBadge data={data} />
       </div>
 
-      {data.isIssuer ? (
-        <IssuanceModes />
+      <DashboardTabs data={data} account={account} />
+    </div>
+  )
+}
+
+type DashboardTab = 'issue' | 'revoke'
+
+/**
+ * Issue vs Revoke — one authenticated surface, not separate routes.
+ * An admin-only wallet lands on Revoke by default, because that's the action
+ * it can actually complete.
+ */
+function DashboardTabs({
+  data,
+  account,
+}: {
+  data: RoleReadResult
+  account: string
+}) {
+  const [tab, setTab] = useState<DashboardTab>(
+    data.isIssuer ? 'issue' : 'revoke',
+  )
+
+  return (
+    <div className="space-y-5">
+      <div
+        role="tablist"
+        aria-label="Dashboard action"
+        className="inline-flex rounded-lg border border-slate-300 bg-slate-50 p-1 text-sm"
+      >
+        <TabButton
+          active={tab === 'issue'}
+          onClick={() => setTab('issue')}
+          controls="dashboard-issue"
+        >
+          Issue
+        </TabButton>
+        <TabButton
+          active={tab === 'revoke'}
+          onClick={() => setTab('revoke')}
+          controls="dashboard-revoke"
+        >
+          Revoke
+        </TabButton>
+      </div>
+
+      {tab === 'issue' ? (
+        <div id="dashboard-issue">
+          {data.isIssuer ? (
+            <IssuanceModes />
+          ) : (
+            <NeedsIssuerRolePanel account={account} />
+          )}
+        </div>
       ) : (
-        <NeedsIssuerRolePanel account={account} />
+        <div id="dashboard-revoke">
+          <RevokeCertificateForm />
+        </div>
       )}
     </div>
+  )
+}
+
+function TabButton({
+  active,
+  onClick,
+  controls,
+  children,
+}: {
+  active: boolean
+  onClick: () => void
+  controls: string
+  children: React.ReactNode
+}) {
+  return (
+    <button
+      type="button"
+      role="tab"
+      aria-selected={active}
+      aria-controls={controls}
+      onClick={onClick}
+      className={`rounded-md px-4 py-1.5 font-semibold transition-colors ${
+        active
+          ? 'bg-white text-brand-900 shadow-sm'
+          : 'text-slate-500 hover:text-slate-700'
+      }`}
+    >
+      {children}
+    </button>
   )
 }
 

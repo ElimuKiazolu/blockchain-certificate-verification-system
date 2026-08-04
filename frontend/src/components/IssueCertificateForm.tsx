@@ -19,6 +19,12 @@ import {
 import { getEthereum } from '../wallet/ethereum'
 import { SEPOLIA_NETWORK } from '../contract'
 import { IssuedCertificateCard } from './IssuedCertificateCard'
+import {
+  FailedBanner,
+  PendingBanner,
+  RejectedBanner,
+  Spinner,
+} from './WriteStateBanners'
 
 /**
  * Single-certificate issuance — the first on-chain WRITE from the frontend
@@ -225,6 +231,7 @@ export function IssueCertificateForm() {
       )}
       {issueState.status === 'failed' && (
         <FailedBanner
+          title="Couldn't issue this certificate"
           message={issueState.message}
           onDismiss={() => setIssueState({ status: 'idle' })}
         />
@@ -440,91 +447,3 @@ function DuplicateNotice({ state }: { state: DuplicateCheckState }) {
   return null
 }
 
-function PendingBanner({ txHash }: { txHash: string }) {
-  const txUrl = `${SEPOLIA_NETWORK.blockExplorerUrl}/tx/${txHash}`
-  return (
-    <div className="mt-4 flex items-start gap-3 rounded-xl border border-brand-200 bg-brand-50 px-4 py-3">
-      <Spinner />
-      <div className="text-sm">
-        <p className="font-medium text-brand-900">
-          Waiting for {SEPOLIA_NETWORK.name} to confirm…
-        </p>
-        <p className="mt-0.5 text-brand-700">
-          This usually takes 15–60 seconds. You can keep this page open.
-        </p>
-        <a
-          href={txUrl}
-          target="_blank"
-          rel="noreferrer"
-          className="mt-1 inline-block font-mono text-xs text-brand-600 hover:underline"
-        >
-          {shortenHash(txHash)} — view on Etherscan ↗
-        </a>
-      </div>
-    </div>
-  )
-}
-
-function RejectedBanner({ onDismiss }: { onDismiss: () => void }) {
-  return (
-    <div className="mt-4 flex items-start justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-      <div>
-        <p className="font-medium">Request declined</p>
-        <p className="mt-0.5">
-          You closed or rejected the wallet prompt — nothing was sent. Your
-          form details are still here; submit again when ready.
-        </p>
-      </div>
-      <button
-        type="button"
-        onClick={onDismiss}
-        className="shrink-0 font-medium text-amber-700 hover:text-amber-900"
-      >
-        Dismiss
-      </button>
-    </div>
-  )
-}
-
-function FailedBanner({
-  message,
-  onDismiss,
-}: {
-  message: string
-  onDismiss: () => void
-}) {
-  return (
-    <div className="mt-4 flex items-start justify-between gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
-      <div>
-        <p className="font-medium">Couldn&apos;t issue this certificate</p>
-        <p className="mt-0.5">{message}</p>
-      </div>
-      <button
-        type="button"
-        onClick={onDismiss}
-        className="shrink-0 font-medium text-red-700 hover:text-red-900"
-      >
-        Dismiss
-      </button>
-    </div>
-  )
-}
-
-function Spinner({
-  light,
-  small,
-}: {
-  light?: boolean
-  small?: boolean
-}) {
-  const size = small ? 'h-3 w-3' : 'h-4 w-4'
-  const border = light
-    ? 'border-white/30 border-t-white'
-    : 'border-brand-200 border-t-brand-600'
-  return (
-    <span
-      className={`inline-block shrink-0 animate-spin rounded-full border-2 ${size} ${border}`}
-      aria-hidden="true"
-    />
-  )
-}
