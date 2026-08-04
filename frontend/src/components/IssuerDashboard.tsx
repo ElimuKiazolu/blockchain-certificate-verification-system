@@ -1,7 +1,7 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { describeRoles } from '../wallet/useRoleRead'
 import { shortenAddress } from '../lib/format'
-import { CERTIFICATE_REGISTRY_ADDRESS } from '../contract'
 import type { RoleReadResult } from '../lib/contract'
 import { IssueCertificateForm } from './IssueCertificateForm'
 import { BatchIssueForm } from './BatchIssueForm'
@@ -201,9 +201,9 @@ function IssuanceModes() {
 
 /**
  * Admin-but-not-issuer: they can SEE the dashboard, but issueCertificate
- * reverts without ISSUER_ROLE. There's no admin panel yet (that's a later
- * journey — docs/03 C2), so the self-service path today is the deployed
- * contract's own Write Contract tab on Etherscan, using the admin wallet.
+ * reverts without ISSUER_ROLE. Since the admin panel landed (docs/03 C2), the
+ * self-service path is in-app — grant the role to this address on `/admin` —
+ * rather than the Etherscan Write-Contract workaround this used to describe.
  */
 function NeedsIssuerRolePanel({ account }: { account: string }) {
   return (
@@ -248,27 +248,23 @@ function NeedsIssuerRolePanel({ account }: { account: string }) {
             </p>
             <ol className="mt-2 list-decimal space-y-1 pl-4">
               <li>
-                Open the contract on{' '}
-                <a
-                  href={`https://sepolia.etherscan.io/address/${CERTIFICATE_REGISTRY_ADDRESS}#writeContract`}
-                  target="_blank"
-                  rel="noreferrer"
+                Open the{' '}
+                <Link
+                  to="/admin"
                   className="font-medium text-brand-600 hover:underline"
                 >
-                  Etherscan → Write Contract
-                </a>{' '}
-                and connect this same admin wallet.
+                  admin panel
+                </Link>{' '}
+                with this same wallet.
               </li>
               <li>
-                Copy the value from the <code>ISSUER_ROLE</code> read-only
-                function (under Read Contract).
+                Paste this address —{' '}
+                <span className="font-mono text-xs">
+                  {shortenAddress(account)}
+                </span>{' '}
+                — and choose <strong>Grant issuer role</strong>.
               </li>
-              <li>
-                Call <code>grantRole</code> with that value as{' '}
-                <code>role</code> and your address as{' '}
-                <code>account</code>.
-              </li>
-              <li>Reload this page once the transaction confirms.</li>
+              <li>Return here once the transaction confirms.</li>
             </ol>
           </div>
         </div>

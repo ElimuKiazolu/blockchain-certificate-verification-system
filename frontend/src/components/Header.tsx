@@ -39,8 +39,14 @@ export function Header() {
           </span>
         </Link>
         <nav className="flex items-center gap-1 text-sm">
+          {/* Always visible, always gated at the route. Showing /admin only to
+              admins would mean reading roles from the header on every page —
+              including the public verifier, which must stay wallet-free for
+              anonymous visitors. A link that explains why it's locked is
+              better than a header that quietly needs a wallet. */}
           <HeaderNavLink to="/">Verify</HeaderNavLink>
           <HeaderNavLink to="/issuer">Issuer</HeaderNavLink>
+          <HeaderNavLink to="/admin">Admin</HeaderNavLink>
           <HeaderNavLink to="/wallet">Wallet</HeaderNavLink>
         </nav>
       </div>

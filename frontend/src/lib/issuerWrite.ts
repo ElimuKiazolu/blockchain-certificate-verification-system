@@ -63,8 +63,18 @@ const REVERT_MESSAGES: Record<string, string> = {
     'The registry has no record matching this. Either it was never issued, or — for a batch certificate — one of the details differs from what was issued (every field is part of the on-chain fingerprint).',
 }
 
-/** Classify a thrown error into a plain-language, user-safe message. */
-export function classifyIssueError(err: unknown): IssueError {
+/**
+ * Classify a thrown error into a plain-language, user-safe message.
+ *
+ * `overrides` lets a surface reword a shared custom error whose meaning is
+ * context-dependent — `AccessControlUnauthorizedAccount` means "you aren't an
+ * issuer" when issuing and "you aren't an administrator" when managing roles,
+ * and a single message would be wrong on one of them.
+ */
+export function classifyIssueError(
+  err: unknown,
+  overrides?: Record<string, string>,
+): IssueError {
   if (isError(err, 'ACTION_REJECTED')) {
     return {
       kind: 'rejected',
@@ -74,6 +84,7 @@ export function classifyIssueError(err: unknown): IssueError {
   if (isError(err, 'CALL_EXCEPTION')) {
     const name = err.revert?.name
     const message =
+      (name && overrides?.[name]) ??
       (name && REVERT_MESSAGES[name]) ??
       err.reason ??
       err.shortMessage ??
