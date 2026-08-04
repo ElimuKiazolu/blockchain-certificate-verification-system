@@ -19,3 +19,15 @@ export function formatDate(unixSeconds: number): string {
     day: 'numeric',
   })
 }
+
+/**
+ * Convert an HTML `<input type="date">` value (YYYY-MM-DD) to a uint64 unix
+ * timestamp (seconds) at UTC midnight — matching the contract's `expiresAt`
+ * convention (0 = never expires). Empty input → 0n.
+ */
+export function dateInputToExpiresAt(dateValue: string): bigint {
+  if (!dateValue) return 0n
+  const ms = Date.parse(`${dateValue}T00:00:00Z`)
+  if (Number.isNaN(ms)) return 0n
+  return BigInt(Math.floor(ms / 1000))
+}

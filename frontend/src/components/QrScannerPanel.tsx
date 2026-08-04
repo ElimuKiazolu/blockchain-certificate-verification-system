@@ -1,13 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { BrowserQRCodeReader, type IScannerControls } from '@zxing/browser'
 import { extractCertHash } from '../lib/readClient'
+import {
+  decodeBatchQrPayload,
+  type BatchCertificateInput,
+} from '../lib/batchVerify'
 
 /**
  * Scan-a-QR input mode. Decodes camera frames entirely client-side
- * (@zxing/browser) and extracts a certificate hash from either a raw hash or
- * a verification URL payload (docs/03 A1), then hands it to the SAME verify
- * pipeline as paste/upload. Camera errors and malformed payloads are
- * input-level problems — shown inline here, never as a verdict.
+ * (@zxing/browser) and resolves the payload to either a BATCH certificate
+ * (fields + Merkle proof, Slice 3b) or a single certificate hash, then hands
+ * it to the SAME verify pipeline as paste/upload. Camera errors and malformed
+ * payloads are input-level problems — shown inline here, never as a verdict.
  */
 type QrState =
   | { status: 'idle' }
@@ -19,9 +23,14 @@ type QrState =
 
 interface QrScannerPanelProps {
   onHashReady: (hash: string) => void
+  /** Called when the scanned QR carries a full batch proof (Slice 3b). */
+  onBatchReady?: (record: BatchCertificateInput) => void
 }
 
-export function QrScannerPanel({ onHashReady }: QrScannerPanelProps) {
+export function QrScannerPanel({
+  onHashReady,
+  onBatchReady,
+}: QrScannerPanelProps) {
   const [state, setState] = useState<QrState>({ status: 'idle' })
   const videoRef = useRef<HTMLVideoElement>(null)
   const controlsRef = useRef<IScannerControls | null>(null)
@@ -54,7 +63,20 @@ export function QrScannerPanel({ onHashReady }: QrScannerPanelProps) {
         (result, _error, frameControls) => {
           if (!result) return // no code in this frame yet — keep scanning
           frameControls.stop()
-          const hash = extractCertHash(result.getText())
+          const text = result.getText()
+
+          // Batch FIRST, deliberately: a proof-carrying payload contains
+          // several bytes32 values (root, certHash, proof hashes), and
+          // extractCertHash matches the first hash-shaped substring it finds.
+          // Checking hash-first would route a batch QR into single-cert
+          // verification and report a confident, wrong NOT_FOUND.
+          const record = onBatchReady ? decodeBatchQrPayload(text) : null
+          if (record && onBatchReady) {
+            onBatchReady(record)
+            return
+          }
+
+          const hash = extractCertHash(text)
           if (hash) {
             onHashReady(hash)
           } else {
@@ -89,7 +111,7 @@ export function QrScannerPanel({ onHashReady }: QrScannerPanelProps) {
         })
       }
     }
-  }, [onHashReady])
+  }, [onHashReady, onBatchReady])
 
   const isScanning = state.status === 'scanning'
 

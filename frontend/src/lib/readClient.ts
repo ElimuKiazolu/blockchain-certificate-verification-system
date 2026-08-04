@@ -170,3 +170,82 @@ export async function verifyByHash(certHash: string): Promise<VerifyResult> {
   }
   throw lastError
 }
+
+/** The fields a batch certificate needs to be re-checked on-chain. */
+export interface BatchVerifyInput {
+  root: string
+  certHash: string
+  ipfsCID: string
+  recipientName: string
+  courseTitle: string
+  /** Unix seconds; 0 = never expires. */
+  expiresAt: number
+  proof: string[]
+}
+
+/**
+ * Verify a BATCH certificate (Phase 6, Slice 3b) — same wallet-free provider,
+ * same RPC fallback chain, same timeout, and the same four-state verdict as
+ * {@link verifyByHash}. The contract recomputes the Merkle leaf from these
+ * arguments and checks it against the stored root, so the proof is validated
+ * ON-CHAIN; this client only forwards the bundle's fields, verbatim.
+ *
+ * ABI (confirmed from blockchain/exports/CertificateRegistry.json):
+ *   verifyBatchCertificate(bytes32 merkleRoot, bytes32 certHash,
+ *     string ipfsCID, string recipientName, string courseTitle,
+ *     uint64 expiresAt, bytes32[] proof) view returns (uint8 status)
+ * The argument order below matches that signature exactly — transposing two
+ * fields would not error, it would quietly return NOT_FOUND.
+ *
+ * Unlike `verifyCertificate`, this view returns ONLY a status: there is no
+ * Certificate struct on-chain for a batch member (per-cert data lives in the
+ * leaf, which is precisely why it must be supplied). The detail fields we
+ * render therefore come from the bundle, and they are trustworthy for exactly
+ * one reason — a non-NOT_FOUND status means those very values reproduced the
+ * committed leaf. On NOT_FOUND nothing is proven, so no certificate is returned.
+ */
+export async function verifyBatchCertificate(
+  input: BatchVerifyInput,
+): Promise<VerifyResult> {
+  let lastError: Error = new Error('No Sepolia RPC endpoint was reachable.')
+  for (const rpcUrl of SEPOLIA_RPC_URLS) {
+    try {
+      const contract = getContract(rpcUrl)
+      const [rawStatus, batch] = (await withTimeout(
+        Promise.all([
+          contract.verifyBatchCertificate(
+            input.root,
+            input.certHash,
+            input.ipfsCID,
+            input.recipientName,
+            input.courseTitle,
+            BigInt(input.expiresAt),
+            input.proof,
+          ),
+          // The batch record supplies the real issuer + issuance time for the
+          // verdict's detail panel; the status call alone can't provide them.
+          contract.batchRoots(input.root),
+        ]),
+        READ_TIMEOUT_MS,
+      )) as [bigint, [string, bigint]]
+
+      const status = CERT_STATUS_BY_INDEX[Number(rawStatus)] ?? 'NOT_FOUND'
+      if (status === 'NOT_FOUND') return { status, certificate: null }
+
+      return {
+        status,
+        certificate: {
+          ipfsCID: input.ipfsCID,
+          issuer: batch[0],
+          issuedAt: Number(batch[1]),
+          expiresAt: input.expiresAt,
+          recipientName: input.recipientName,
+          courseTitle: input.courseTitle,
+        },
+      }
+    } catch (err) {
+      lastError = err instanceof Error ? err : new Error(String(err))
+    }
+  }
+  throw lastError
+}

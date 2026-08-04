@@ -2,6 +2,7 @@ import {
   lazy,
   Suspense,
   useCallback,
+  useEffect,
   useRef,
   useState,
   type FormEvent,
@@ -9,12 +10,20 @@ import {
 import {
   isValidCertHash,
   verifyByHash,
+  verifyBatchCertificate,
   type VerifyResult,
 } from '../lib/readClient'
+import {
+  decodeBatchQrPayload,
+  type BatchCertificateInput,
+} from '../lib/batchVerify'
+import { verifyMembers, type MemberResult } from '../lib/bulkVerify'
 import { VerdictResult } from '../components/VerdictResult'
 import { ReadErrorNotice } from '../components/ReadErrorNotice'
 import { VerifyModeTabs, type VerifyMode } from '../components/VerifyModeTabs'
 import { FileUploadPanel } from '../components/FileUploadPanel'
+import { BatchVerifyPanel } from '../components/BatchVerifyPanel'
+import { BulkVerifyResults } from '../components/BulkVerifyResults'
 
 // The QR decoder (@zxing/*) is a large dependency — code-split so
 // Paste/Upload users never load it; it only fetches when Scan is selected.
@@ -25,21 +34,45 @@ const QrScannerPanel = lazy(() =>
 )
 
 /**
- * Public verifier (Phase 5) — wallet-free, verify by hash/file/QR.
+ * Public verifier (Phase 5, extended in Phase 6 Slice 3b) — wallet-free;
+ * verify by hash / file / QR / batch proof.
  *
  * Explicit states (docs/07 §2): idle → loading → success(verdict) | error.
  * A read failure lands in `error` (ReadErrorNotice), never in a verdict, so a
- * network problem is never shown as NOT FOUND. This is the SAME pipeline
- * regardless of input method — paste, upload, and scan all resolve to a
- * bytes32 hash and call the identical `runVerify`. Slice 3 only adds two more
- * ways to produce that hash; the verify/verdict logic itself is unchanged
- * from Slice 1/2.
+ * network problem is never shown as NOT FOUND.
+ *
+ * ONE pipeline, two kinds of target. Paste, upload, and scan still resolve to
+ * a bytes32 hash and take the single-cert path exactly as before. Slice 3b
+ * adds a *batch* target — the fields + Merkle proof that Slice 3a bundled with
+ * a cohort certificate — which the contract re-checks against a stored root.
+ * Both land in the same state machine and the same `VerdictResult`.
  */
+type VerifyTarget =
+  | { kind: 'single'; hash: string }
+  | { kind: 'batch'; input: BatchCertificateInput }
+
 type VerifyState =
   | { status: 'idle' }
   | { status: 'loading' }
-  | { status: 'success'; result: VerifyResult; checkedHash: string }
-  | { status: 'error'; message: string; checkedHash: string }
+  | { status: 'success'; result: VerifyResult; target: VerifyTarget }
+  | { status: 'error'; message: string; target: VerifyTarget }
+
+/** The hash a verdict is "about", whichever path produced it. */
+function targetHash(target: VerifyTarget): string {
+  return target.kind === 'single' ? target.hash : target.input.certHash
+}
+
+/**
+ * Whole-cohort verification (Slice 3c) is a separate state from the
+ * single-verdict machine above: its answer is a table of many outcomes, not
+ * one verdict, so it cannot be squeezed into `VerifyResult`. The two are
+ * mutually exclusive — starting either clears the other — so the result region
+ * only ever shows one answer.
+ */
+interface BulkState {
+  results: MemberResult[]
+  progress: { completed: number; total: number } | null
+}
 
 const TRUST_POINTS = [
   'No wallet or account needed',
@@ -52,19 +85,117 @@ export function VerifierPage() {
   const [hash, setHash] = useState('')
   const [validationError, setValidationError] = useState<string | null>(null)
   const [state, setState] = useState<VerifyState>({ status: 'idle' })
+  const [batchPrefill, setBatchPrefill] = useState<{
+    records: BatchCertificateInput[]
+    source: string
+    key: number
+  } | null>(null)
+  const [bulk, setBulk] = useState<BulkState | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
-  const runVerify = useCallback(async (target: string) => {
+  const runVerify = useCallback(async (target: VerifyTarget) => {
+    setBulk(null) // a single verdict replaces any cohort results on screen
     setState({ status: 'loading' })
     try {
-      const result = await verifyByHash(target)
-      setState({ status: 'success', result, checkedHash: target })
+      const result =
+        target.kind === 'single'
+          ? await verifyByHash(target.hash)
+          : await verifyBatchCertificate(target.input)
+      setState({ status: 'success', result, target })
     } catch (err) {
       const message =
         err instanceof Error ? err.message : 'Something went wrong.'
-      setState({ status: 'error', message, checkedHash: target })
+      setState({ status: 'error', message, target })
     }
   }, [])
+
+  // Kept as the exact `(hash: string) => void` shape the existing paste /
+  // upload / scan panels already call — their behavior is untouched.
+  const runVerifyHash = useCallback(
+    (hash: string) => void runVerify({ kind: 'single', hash }),
+    [runVerify],
+  )
+
+  const runVerifyBatch = useCallback(
+    (input: BatchCertificateInput, source: string) => {
+      setBatchPrefill({ records: [input], source, key: Date.now() })
+      setMode('batch')
+      void runVerify({ kind: 'batch', input })
+    },
+    [runVerify],
+  )
+
+  /**
+   * Run (or re-run) a set of members. Reads are throttled inside
+   * `verifyMembers`; results stream in via `onResult` so the table fills
+   * progressively instead of sitting blank until the last row lands.
+   *
+   * `slotFor` maps a member back to its row in the on-screen table, which is
+   * what lets a retry of only the unchecked rows update those rows in place.
+   */
+  const runBulk = useCallback(
+    async (
+      members: BatchCertificateInput[],
+      slotFor: (memberIndex: number) => number,
+      seed: MemberResult[],
+    ) => {
+      setState({ status: 'idle' }) // cohort results replace any single verdict
+      const settled = [...seed]
+      setBulk({
+        results: settled,
+        progress: { completed: 0, total: members.length },
+      })
+
+      await verifyMembers(members, {
+        onResult: (result) => {
+          const slot = slotFor(result.index)
+          settled[slot] = { ...result, index: slot }
+        },
+        onProgress: (completed) => {
+          setBulk({
+            results: [...settled],
+            progress:
+              completed < members.length
+                ? { completed, total: members.length }
+                : null,
+          })
+        },
+      })
+    },
+    [],
+  )
+
+  const verifyAll = useCallback(
+    (members: BatchCertificateInput[]) => {
+      void runBulk(members, (i) => i, [])
+    },
+    [runBulk],
+  )
+
+  /** Re-check only the rows whose read failed — never the settled verdicts. */
+  const retryUnchecked = useCallback(() => {
+    if (!bulk) return
+    const pending = bulk.results.filter(
+      (row) => row?.outcome.kind === 'unchecked',
+    )
+    if (pending.length === 0) return
+    const slots = pending.map((row) => row.index)
+    void runBulk(
+      pending.map((row) => row.member),
+      (i) => slots[i],
+      bulk.results,
+    )
+  }, [bulk, runBulk])
+
+  // A proof-carrying QR opened as a link (`/?batch=…`) — the common case when
+  // a phone's native camera app scans it — loads and verifies on arrival.
+  // Single-cert links are untouched.
+  useEffect(() => {
+    const encoded = new URLSearchParams(window.location.search).get('batch')
+    if (!encoded) return
+    const record = decodeBatchQrPayload(`?batch=${encoded}`)
+    if (record) runVerifyBatch(record, 'scanned link')
+  }, [runVerifyBatch])
 
   const onSubmit = (event: FormEvent) => {
     event.preventDefault()
@@ -77,13 +208,15 @@ export function VerifierPage() {
       return
     }
     setValidationError(null)
-    void runVerify(trimmed)
+    runVerifyHash(trimmed)
   }
 
   const reset = () => {
     setState({ status: 'idle' })
     setHash('')
     setValidationError(null)
+    setBatchPrefill(null)
+    setBulk(null)
   }
 
   const onModeChange = (next: VerifyMode) => {
@@ -92,6 +225,7 @@ export function VerifierPage() {
   }
 
   const isLoading = state.status === 'loading'
+  const isBulkRunning = bulk?.progress !== null && bulk !== null
 
   return (
     <section className="mx-auto w-full max-w-2xl px-5 py-12 sm:px-6 sm:py-16">
@@ -173,15 +307,32 @@ export function VerifierPage() {
 
         {mode === 'upload' && (
           <div className="mt-5">
-            <FileUploadPanel onHashReady={runVerify} busy={isLoading} />
+            <FileUploadPanel onHashReady={runVerifyHash} busy={isLoading} />
           </div>
         )}
 
         {mode === 'scan' && (
           <div className="mt-5">
             <Suspense fallback={<QrScannerLoadingFallback />}>
-              <QrScannerPanel onHashReady={runVerify} />
+              <QrScannerPanel
+                onHashReady={runVerifyHash}
+                onBatchReady={(record) => runVerifyBatch(record, 'scanned QR')}
+              />
             </Suspense>
+          </div>
+        )}
+
+        {mode === 'batch' && (
+          <div className="mt-5">
+            <BatchVerifyPanel
+              key={batchPrefill?.key ?? 'blank'}
+              busy={isLoading || isBulkRunning}
+              prefill={batchPrefill ?? undefined}
+              onRecordReady={(record) =>
+                void runVerify({ kind: 'batch', input: record })
+              }
+              onVerifyAll={verifyAll}
+            />
           </div>
         )}
       </div>
@@ -198,7 +349,18 @@ export function VerifierPage() {
 
       {/* Result region — polite live region so verdicts are announced. */}
       <div className="mt-8" aria-live="polite">
-        {state.status === 'idle' && (
+        {/* Cohort results take over the region when a bulk run is active;
+            the single-verdict states below are mutually exclusive with it. */}
+        {bulk && (
+          <BulkVerifyResults
+            results={bulk.results}
+            progress={bulk.progress}
+            onRetryUnchecked={retryUnchecked}
+            onReset={reset}
+          />
+        )}
+
+        {!bulk && state.status === 'idle' && (
           <p className="rounded-2xl border border-dashed border-slate-300 bg-white/60 px-6 py-12 text-center text-sm text-slate-500">
             {mode === 'paste' &&
               'Enter a certificate hash above to check its status.'}
@@ -206,10 +368,12 @@ export function VerifierPage() {
               'Upload a certificate file above to check its status.'}
             {mode === 'scan' &&
               'Scan a certificate QR code above to check its status.'}
+            {mode === 'batch' &&
+              'Load your certificate bundle above to check its status.'}
           </p>
         )}
 
-        {state.status === 'loading' && (
+        {!bulk && state.status === 'loading' && (
           <div className="flex items-center justify-center gap-3 rounded-2xl border border-slate-200 bg-white px-6 py-12 text-slate-600">
             <span
               className="h-4 w-4 animate-spin rounded-full border-2 border-slate-300 border-t-brand-600"
@@ -219,21 +383,26 @@ export function VerifierPage() {
           </div>
         )}
 
-        {state.status === 'success' && (
+        {!bulk && state.status === 'success' && (
           <div className="animate-verdict">
             <VerdictResult
               result={state.result}
-              checkedHash={state.checkedHash}
+              checkedHash={targetHash(state.target)}
               onReset={reset}
+              batch={
+                state.target.kind === 'batch'
+                  ? { root: state.target.input.root }
+                  : undefined
+              }
             />
           </div>
         )}
 
-        {state.status === 'error' && (
+        {!bulk && state.status === 'error' && (
           <div className="animate-verdict">
             <ReadErrorNotice
               message={state.message}
-              onRetry={() => void runVerify(state.checkedHash)}
+              onRetry={() => void runVerify(state.target)}
             />
           </div>
         )}
