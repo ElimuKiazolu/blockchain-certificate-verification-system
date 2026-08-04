@@ -1,8 +1,10 @@
+import { useState } from 'react'
 import { describeRoles } from '../wallet/useRoleRead'
 import { shortenAddress } from '../lib/format'
 import { CERTIFICATE_REGISTRY_ADDRESS } from '../contract'
 import type { RoleReadResult } from '../lib/contract'
 import { IssueCertificateForm } from './IssueCertificateForm'
+import { BatchIssueForm } from './BatchIssueForm'
 
 /**
  * The authorized issuer dashboard shell. Rendered only inside
@@ -59,10 +61,48 @@ export function IssuerDashboard({
       </div>
 
       {data.isIssuer ? (
-        <IssueCertificateForm />
+        <IssuanceModes />
       ) : (
         <NeedsIssuerRolePanel account={account} />
       )}
+    </div>
+  )
+}
+
+type IssuanceMode = 'single' | 'batch'
+
+/** Single-cert (Slice 2) vs Merkle batch (Slice 3a) — one form visible at a time. */
+function IssuanceModes() {
+  const [mode, setMode] = useState<IssuanceMode>('single')
+
+  return (
+    <div className="space-y-5">
+      <div className="inline-flex rounded-lg border border-slate-300 bg-slate-50 p-1 text-sm">
+        <button
+          type="button"
+          onClick={() => setMode('single')}
+          className={`rounded-md px-3.5 py-1.5 font-semibold transition-colors ${
+            mode === 'single'
+              ? 'bg-white text-brand-900 shadow-sm'
+              : 'text-slate-500 hover:text-slate-700'
+          }`}
+        >
+          Single certificate
+        </button>
+        <button
+          type="button"
+          onClick={() => setMode('batch')}
+          className={`rounded-md px-3.5 py-1.5 font-semibold transition-colors ${
+            mode === 'batch'
+              ? 'bg-white text-brand-900 shadow-sm'
+              : 'text-slate-500 hover:text-slate-700'
+          }`}
+        >
+          Batch (Merkle)
+        </button>
+      </div>
+
+      {mode === 'single' ? <IssueCertificateForm /> : <BatchIssueForm />}
     </div>
   )
 }

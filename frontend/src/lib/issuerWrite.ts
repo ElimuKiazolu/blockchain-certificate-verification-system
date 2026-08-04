@@ -48,6 +48,10 @@ const REVERT_MESSAGES: Record<string, string> = {
   AccessControlUnauthorizedAccount:
     "This wallet doesn't currently hold the issuer role — it may have been revoked since you connected. Reconnect, or ask an administrator to grant ISSUER_ROLE.",
   EmptyCID: 'The document reference field cannot be empty.',
+  BatchRootExists:
+    'A batch with this exact Merkle root has already been issued — the cohort may have been submitted already.',
+  EmptyRoot:
+    'The computed Merkle root is empty. Add at least one valid certificate row before issuing.',
 }
 
 /** Classify a thrown error into a plain-language, user-safe message. */
@@ -97,4 +101,25 @@ export async function issueCertificate(
     input.courseTitle,
     input.expiresAt,
   )) as ContractTransactionResponse
+}
+
+/**
+ * Send the batchIssue transaction — commits one Merkle root for a whole
+ * cohort (Phase 6, Slice 3a). Same signer/contract-building pattern as
+ * {@link issueCertificate}; errors are classified with the same
+ * {@link classifyIssueError} (BatchRootExists / EmptyRoot are in
+ * REVERT_MESSAGES above).
+ */
+export async function batchIssue(
+  ethereum: Eip1193Provider,
+  merkleRoot: string,
+): Promise<ContractTransactionResponse> {
+  const provider = new BrowserProvider(ethereum)
+  const signer = await provider.getSigner()
+  const contract = new Contract(
+    CERTIFICATE_REGISTRY_ADDRESS,
+    CERTIFICATE_REGISTRY_ABI,
+    signer,
+  )
+  return (await contract.batchIssue(merkleRoot)) as ContractTransactionResponse
 }

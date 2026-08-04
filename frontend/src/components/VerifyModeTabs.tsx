@@ -1,9 +1,10 @@
-export type VerifyMode = 'paste' | 'upload' | 'scan'
+export type VerifyMode = 'paste' | 'upload' | 'scan' | 'batch'
 
 const MODES: { id: VerifyMode; label: string }[] = [
   { id: 'paste', label: 'Paste hash' },
   { id: 'upload', label: 'Upload file' },
   { id: 'scan', label: 'Scan QR' },
+  { id: 'batch', label: 'Batch proof' },
 ]
 
 interface VerifyModeTabsProps {
@@ -11,13 +12,17 @@ interface VerifyModeTabsProps {
   onChange: (mode: VerifyMode) => void
 }
 
-/** Segmented control switching between the three input methods (docs/03 A-series). */
+/**
+ * Segmented control switching between the input methods (docs/03 A-series).
+ * Four labels won't fit one row on a narrow phone, so the control is a 2x2
+ * grid there and a single row from `sm` up.
+ */
 export function VerifyModeTabs({ active, onChange }: VerifyModeTabsProps) {
   return (
     <div
       role="tablist"
       aria-label="Certificate input method"
-      className="inline-flex w-full rounded-xl border border-slate-200 bg-slate-100 p-1"
+      className="grid w-full grid-cols-2 gap-1 rounded-xl border border-slate-200 bg-slate-100 p-1 sm:grid-cols-4"
     >
       {MODES.map((mode) => {
         const isActive = mode.id === active

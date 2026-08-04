@@ -2,6 +2,7 @@ import {
   lazy,
   Suspense,
   useCallback,
+  useEffect,
   useRef,
   useState,
   type FormEvent,
@@ -9,12 +10,18 @@ import {
 import {
   isValidCertHash,
   verifyByHash,
+  verifyBatchCertificate,
   type VerifyResult,
 } from '../lib/readClient'
+import {
+  decodeBatchQrPayload,
+  type BatchCertificateInput,
+} from '../lib/batchVerify'
 import { VerdictResult } from '../components/VerdictResult'
 import { ReadErrorNotice } from '../components/ReadErrorNotice'
 import { VerifyModeTabs, type VerifyMode } from '../components/VerifyModeTabs'
 import { FileUploadPanel } from '../components/FileUploadPanel'
+import { BatchVerifyPanel } from '../components/BatchVerifyPanel'
 
 // The QR decoder (@zxing/*) is a large dependency — code-split so
 // Paste/Upload users never load it; it only fetches when Scan is selected.
@@ -25,21 +32,33 @@ const QrScannerPanel = lazy(() =>
 )
 
 /**
- * Public verifier (Phase 5) — wallet-free, verify by hash/file/QR.
+ * Public verifier (Phase 5, extended in Phase 6 Slice 3b) — wallet-free;
+ * verify by hash / file / QR / batch proof.
  *
  * Explicit states (docs/07 §2): idle → loading → success(verdict) | error.
  * A read failure lands in `error` (ReadErrorNotice), never in a verdict, so a
- * network problem is never shown as NOT FOUND. This is the SAME pipeline
- * regardless of input method — paste, upload, and scan all resolve to a
- * bytes32 hash and call the identical `runVerify`. Slice 3 only adds two more
- * ways to produce that hash; the verify/verdict logic itself is unchanged
- * from Slice 1/2.
+ * network problem is never shown as NOT FOUND.
+ *
+ * ONE pipeline, two kinds of target. Paste, upload, and scan still resolve to
+ * a bytes32 hash and take the single-cert path exactly as before. Slice 3b
+ * adds a *batch* target — the fields + Merkle proof that Slice 3a bundled with
+ * a cohort certificate — which the contract re-checks against a stored root.
+ * Both land in the same state machine and the same `VerdictResult`.
  */
+type VerifyTarget =
+  | { kind: 'single'; hash: string }
+  | { kind: 'batch'; input: BatchCertificateInput }
+
 type VerifyState =
   | { status: 'idle' }
   | { status: 'loading' }
-  | { status: 'success'; result: VerifyResult; checkedHash: string }
-  | { status: 'error'; message: string; checkedHash: string }
+  | { status: 'success'; result: VerifyResult; target: VerifyTarget }
+  | { status: 'error'; message: string; target: VerifyTarget }
+
+/** The hash a verdict is "about", whichever path produced it. */
+function targetHash(target: VerifyTarget): string {
+  return target.kind === 'single' ? target.hash : target.input.certHash
+}
 
 const TRUST_POINTS = [
   'No wallet or account needed',
@@ -52,19 +71,53 @@ export function VerifierPage() {
   const [hash, setHash] = useState('')
   const [validationError, setValidationError] = useState<string | null>(null)
   const [state, setState] = useState<VerifyState>({ status: 'idle' })
+  const [batchPrefill, setBatchPrefill] = useState<{
+    records: BatchCertificateInput[]
+    source: string
+    key: number
+  } | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
-  const runVerify = useCallback(async (target: string) => {
+  const runVerify = useCallback(async (target: VerifyTarget) => {
     setState({ status: 'loading' })
     try {
-      const result = await verifyByHash(target)
-      setState({ status: 'success', result, checkedHash: target })
+      const result =
+        target.kind === 'single'
+          ? await verifyByHash(target.hash)
+          : await verifyBatchCertificate(target.input)
+      setState({ status: 'success', result, target })
     } catch (err) {
       const message =
         err instanceof Error ? err.message : 'Something went wrong.'
-      setState({ status: 'error', message, checkedHash: target })
+      setState({ status: 'error', message, target })
     }
   }, [])
+
+  // Kept as the exact `(hash: string) => void` shape the existing paste /
+  // upload / scan panels already call — their behavior is untouched.
+  const runVerifyHash = useCallback(
+    (hash: string) => void runVerify({ kind: 'single', hash }),
+    [runVerify],
+  )
+
+  const runVerifyBatch = useCallback(
+    (input: BatchCertificateInput, source: string) => {
+      setBatchPrefill({ records: [input], source, key: Date.now() })
+      setMode('batch')
+      void runVerify({ kind: 'batch', input })
+    },
+    [runVerify],
+  )
+
+  // A proof-carrying QR opened as a link (`/?batch=…`) — the common case when
+  // a phone's native camera app scans it — loads and verifies on arrival.
+  // Single-cert links are untouched.
+  useEffect(() => {
+    const encoded = new URLSearchParams(window.location.search).get('batch')
+    if (!encoded) return
+    const record = decodeBatchQrPayload(`?batch=${encoded}`)
+    if (record) runVerifyBatch(record, 'scanned link')
+  }, [runVerifyBatch])
 
   const onSubmit = (event: FormEvent) => {
     event.preventDefault()
@@ -77,13 +130,14 @@ export function VerifierPage() {
       return
     }
     setValidationError(null)
-    void runVerify(trimmed)
+    runVerifyHash(trimmed)
   }
 
   const reset = () => {
     setState({ status: 'idle' })
     setHash('')
     setValidationError(null)
+    setBatchPrefill(null)
   }
 
   const onModeChange = (next: VerifyMode) => {
@@ -173,15 +227,31 @@ export function VerifierPage() {
 
         {mode === 'upload' && (
           <div className="mt-5">
-            <FileUploadPanel onHashReady={runVerify} busy={isLoading} />
+            <FileUploadPanel onHashReady={runVerifyHash} busy={isLoading} />
           </div>
         )}
 
         {mode === 'scan' && (
           <div className="mt-5">
             <Suspense fallback={<QrScannerLoadingFallback />}>
-              <QrScannerPanel onHashReady={runVerify} />
+              <QrScannerPanel
+                onHashReady={runVerifyHash}
+                onBatchReady={(record) => runVerifyBatch(record, 'scanned QR')}
+              />
             </Suspense>
+          </div>
+        )}
+
+        {mode === 'batch' && (
+          <div className="mt-5">
+            <BatchVerifyPanel
+              key={batchPrefill?.key ?? 'blank'}
+              busy={isLoading}
+              prefill={batchPrefill ?? undefined}
+              onRecordReady={(record) =>
+                void runVerify({ kind: 'batch', input: record })
+              }
+            />
           </div>
         )}
       </div>
@@ -206,6 +276,8 @@ export function VerifierPage() {
               'Upload a certificate file above to check its status.'}
             {mode === 'scan' &&
               'Scan a certificate QR code above to check its status.'}
+            {mode === 'batch' &&
+              'Load your certificate bundle above to check its status.'}
           </p>
         )}
 
@@ -223,8 +295,13 @@ export function VerifierPage() {
           <div className="animate-verdict">
             <VerdictResult
               result={state.result}
-              checkedHash={state.checkedHash}
+              checkedHash={targetHash(state.target)}
               onReset={reset}
+              batch={
+                state.target.kind === 'batch'
+                  ? { root: state.target.input.root }
+                  : undefined
+              }
             />
           </div>
         )}
@@ -233,7 +310,7 @@ export function VerifierPage() {
           <div className="animate-verdict">
             <ReadErrorNotice
               message={state.message}
-              onRetry={() => void runVerify(state.checkedHash)}
+              onRetry={() => void runVerify(state.target)}
             />
           </div>
         )}
