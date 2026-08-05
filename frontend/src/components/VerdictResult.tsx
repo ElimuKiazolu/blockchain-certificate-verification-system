@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import type { CertStatus, VerifyResult } from '../lib/readClient'
 import { CERTIFICATE_REGISTRY_ADDRESS, SEPOLIA_NETWORK } from '../contract'
 import { formatDate, shortenAddress, shortenHash } from '../lib/format'
+import { ipfsUrl, isRetrievableCid } from '../lib/backendClient'
 
 /**
  * The verdict IS the interface (docs/04 §5). Each of the four on-chain states
@@ -179,18 +180,30 @@ export function VerdictResult({
             label="Expiry"
             value={cert.expiresAt ? formatDate(cert.expiresAt) : 'No expiry'}
           />
+          {/* The document link resolves the stored CID through the configured
+              IPFS gateway (Phase 7). Certificates issued before IPFS was wired
+              carry a placeholder rather than a real CID — those get an honest
+              "not stored" note instead of a link that could only 404. The
+              verdict itself never depends on this: it renders whether or not
+              the file loads (docs/07 R7). */}
           {cert.ipfsCID && (
             <Field
               label="Document"
               value={
-                <a
-                  href={`https://ipfs.io/ipfs/${cert.ipfsCID}`}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="rounded-sm text-brand-600 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-400"
-                >
-                  View file (IPFS)
-                </a>
+                isRetrievableCid(cert.ipfsCID) ? (
+                  <a
+                    href={ipfsUrl(cert.ipfsCID)}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="rounded-sm text-brand-600 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-400"
+                  >
+                    View file (IPFS)
+                  </a>
+                ) : (
+                  <span className="text-slate-500">
+                    Not stored — issued before file storage was enabled
+                  </span>
+                )
               }
             />
           )}
