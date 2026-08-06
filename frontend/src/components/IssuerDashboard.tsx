@@ -6,6 +6,7 @@ import type { RoleReadResult } from '../lib/contract'
 import { IssueCertificateForm } from './IssueCertificateForm'
 import { BatchIssueForm } from './BatchIssueForm'
 import { RevokeCertificateForm } from './RevokeCertificateForm'
+import { MyCertificatesList } from './MyCertificatesList'
 
 /**
  * The authorized issuer dashboard shell. Rendered only inside
@@ -74,7 +75,7 @@ export function IssuerDashboard({
   )
 }
 
-type DashboardTab = 'issue' | 'revoke'
+type DashboardTab = 'issue' | 'revoke' | 'certificates'
 
 /**
  * Issue vs Revoke — one authenticated surface, not separate routes.
@@ -113,9 +114,16 @@ function DashboardTabs({
         >
           Revoke
         </TabButton>
+        <TabButton
+          active={tab === 'certificates'}
+          onClick={() => setTab('certificates')}
+          controls="dashboard-certificates"
+        >
+          My certificates
+        </TabButton>
       </div>
 
-      {tab === 'issue' ? (
+      {tab === 'issue' && (
         <div id="dashboard-issue">
           {data.isIssuer ? (
             <IssuanceModes />
@@ -123,9 +131,15 @@ function DashboardTabs({
             <NeedsIssuerRolePanel account={account} />
           )}
         </div>
-      ) : (
+      )}
+      {tab === 'revoke' && (
         <div id="dashboard-revoke">
           <RevokeCertificateForm />
+        </div>
+      )}
+      {tab === 'certificates' && (
+        <div id="dashboard-certificates">
+          <MyCertificatesList account={account} />
         </div>
       )}
     </div>
