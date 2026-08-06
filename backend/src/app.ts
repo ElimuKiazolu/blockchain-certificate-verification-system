@@ -6,6 +6,7 @@ import cors from 'cors'
 import { config } from './config.js'
 import { healthRouter } from './routes/health.js'
 import { ipfsRouter } from './routes/ipfs.js'
+import { certificatesRouter } from './routes/certificates.js'
 
 export function createApp(): Express {
   const app = express()
@@ -31,6 +32,7 @@ export function createApp(): Express {
 
   app.use('/api', healthRouter)
   app.use('/api/ipfs', ipfsRouter)
+  app.use('/api', certificatesRouter)
 
   app.use((_req: Request, res: Response) => {
     res.status(404).json({ error: 'not_found', message: 'No such endpoint.' })

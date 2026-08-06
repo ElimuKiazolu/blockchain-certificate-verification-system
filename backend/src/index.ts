@@ -4,7 +4,7 @@
 // the chain remains the source of truth, and the public verifier must keep
 // working with this process stopped (CLAUDE.md architecture invariants).
 
-import { config, isPinataConfigured } from './config.js'
+import { config, isMongoConfigured, isPinataConfigured } from './config.js'
 import { createApp } from './app.js'
 
 const app = createApp()
@@ -23,6 +23,17 @@ app.listen(config.port, () => {
     console.warn(
       '[backend] Pinata: NOT configured — uploads will return 503.\n' +
         '          Copy backend/.env.example to backend/.env, set PINATA_JWT, and restart.',
+    )
+  }
+
+  // Same degrade-don't-crash posture as Pinata. The index is a cache; without
+  // it the server still runs, files still pin, and verification is untouched.
+  if (isMongoConfigured()) {
+    console.log('[backend] Mongo: configured — index endpoints enabled')
+  } else {
+    console.warn(
+      '[backend] Mongo not configured — index endpoints disabled.\n' +
+        '          Set MONGODB_URI in backend/.env to enable certificate listing.',
     )
   }
 })

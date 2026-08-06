@@ -50,6 +50,49 @@ export const config = {
     .filter(Boolean),
 
   maxUploadBytes: positiveInt('MAX_UPLOAD_MB', 10) * 1024 * 1024,
+
+  /**
+   * SECRET. MongoDB Atlas connection string — server-side only, never logged
+   * and never sent to the browser. The index it points at is a CACHE: the
+   * chain is authoritative and the whole database is rebuildable from events
+   * (see lib/chainSync.ts).
+   */
+  mongoUri: env('MONGODB_URI', ''),
+  mongoDbName: env('MONGODB_DB', 'certificate_registry'),
+
+  /**
+   * Where the ABI + deployed address come from. Read at RUNTIME from the
+   * Hardhat export rather than copied into this package, so the contract
+   * boundary stays single-sourced (CLAUDE.md architecture invariant).
+   */
+  contractExportPath: env(
+    'CONTRACT_EXPORT_PATH',
+    resolve(process.cwd(), '../blockchain/exports/CertificateRegistry.json'),
+  ),
+
+  /** RPCs used for event scanning, tried in order. */
+  rpcUrls: env(
+    'SEPOLIA_RPC_URLS',
+    'https://ethereum-sepolia-rpc.publicnode.com,https://sepolia.drpc.org',
+  )
+    .split(',')
+    .map((url) => url.trim())
+    .filter(Boolean),
+
+  /**
+   * First block to scan. The registry's earliest on-chain activity is block
+   * 11222253 (found by scanning logs backwards); starting slightly below that
+   * costs nothing and tolerates a redeploy to an earlier block.
+   */
+  deployBlock: positiveInt('REGISTRY_DEPLOY_BLOCK', 11_222_000),
+
+  /**
+   * Blocks per eth_getLogs call. Public RPCs cap this and differ wildly —
+   * publicnode allows 50k, drpc 10k on the free plan, 1rpc only 50 — and 45k
+   * requests were observed timing out even when accepted. 10k is the largest
+   * size that proved reliable here.
+   */
+  logChunkSize: positiveInt('LOG_CHUNK_SIZE', 10_000),
 } as const
 
 /**
@@ -61,4 +104,14 @@ export const config = {
  */
 export function isPinataConfigured(): boolean {
   return config.pinataJwt.length > 0
+}
+
+/**
+ * Whether the index is available. Same philosophy as {@link isPinataConfigured}:
+ * an unconfigured database must not stop the server. The index is a
+ * convenience layer — verification never touches it — so its absence disables
+ * two endpoints and nothing else.
+ */
+export function isMongoConfigured(): boolean {
+  return config.mongoUri.length > 0
 }
