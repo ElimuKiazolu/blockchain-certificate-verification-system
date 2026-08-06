@@ -1,3 +1,5 @@
+import { Building2, FileSignature, ShieldCheck, Wallet } from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 import { useWallet } from '../wallet/context'
 import { useRoleRead } from '../wallet/useRoleRead'
 
@@ -27,8 +29,9 @@ import { useRoleRead } from '../wallet/useRoleRead'
 export interface NavLink {
   to: string
   label: string
-  /** Short line used in the wide hero panel. */
+  /** Small grey line under the label. */
   hint: string
+  Icon: LucideIcon
 }
 
 export function useNavLinks(): NavLink[] {
@@ -37,18 +40,74 @@ export function useNavLinks(): NavLink[] {
 
   const roles = role.status === 'success' ? role.data : null
   const links: NavLink[] = [
-    { to: '/', label: 'Verifier', hint: 'Check any certificate' },
+    {
+      to: '/',
+      label: 'Verifier',
+      hint: 'Verify certificates',
+      Icon: ShieldCheck,
+    },
   ]
 
   if (roles?.isIssuer || roles?.isAdmin) {
-    links.push({ to: '/issuer', label: 'Issuer', hint: 'Issue and revoke' })
+    links.push({
+      to: '/issuer',
+      label: 'Issuer',
+      hint: 'Issue certificates',
+      Icon: FileSignature,
+    })
   }
   if (roles?.isAdmin) {
-    links.push({ to: '/admin', label: 'Admin', hint: 'Manage issuer access' })
+    links.push({
+      to: '/admin',
+      label: 'Admin',
+      hint: 'Manage issuer access',
+      Icon: Building2,
+    })
   }
   if (status === 'connected') {
-    links.push({ to: '/wallet', label: 'Wallet', hint: 'Account and roles' })
+    links.push({
+      to: '/wallet',
+      label: 'Wallet',
+      hint: 'Manage wallet',
+      Icon: Wallet,
+    })
   }
 
   return links
+}
+
+/**
+ * The role summary shown at the foot of the sidebar. Returns null when there
+ * is nothing honest to claim — disconnected, still reading, or a failed read.
+ * A failed read must never render as "no privileges" (docs/07 §3).
+ */
+export function useRoleSummary(): { title: string; detail: string } | null {
+  const { status } = useWallet()
+  const { state: role } = useRoleRead()
+
+  if (status !== 'connected' || role.status !== 'success') return null
+
+  const { isAdmin, isIssuer } = role.data
+  if (isAdmin && isIssuer) {
+    return {
+      title: 'Admin + Issuer Access',
+      detail: 'You can issue and revoke certificates, and manage issuer access.',
+    }
+  }
+  if (isAdmin) {
+    return {
+      title: 'Admin Access',
+      detail: 'You can manage issuer access and revoke any certificate.',
+    }
+  }
+  if (isIssuer) {
+    return {
+      title: 'Issuer Access',
+      detail: 'You can issue certificates and revoke the ones you issued.',
+    }
+  }
+  return {
+    title: 'No Registry Role',
+    detail: 'This wallet can verify certificates, like any visitor.',
+  }
 }

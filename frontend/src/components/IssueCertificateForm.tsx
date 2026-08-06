@@ -384,6 +384,7 @@ export function IssueCertificateForm() {
           {/* The manual CID field is gone: the CID is now obtained
               automatically when the file is stored, so an editable field could
               only ever disagree with the file that was actually pinned. */}
+          {/* Expiry and the file sit on one row, as in the reference layout. */}
           <div className="grid gap-4 sm:grid-cols-2">
             <Field
               label="Expiry date (optional)"
@@ -398,12 +399,11 @@ export function IssueCertificateForm() {
                 className={inputClass()}
               />
             </Field>
-          </div>
 
-          <div>
-            <span className="block text-sm font-semibold text-slate-800">
-              Certificate file
-            </span>
+            <div>
+              <span className="block text-sm font-semibold text-slate-800">
+                Certificate file
+              </span>
             <div
               onDragOver={(e) => {
                 e.preventDefault()
@@ -551,13 +551,14 @@ export function IssueCertificateForm() {
                 </div>
               )}
             </div>
-            <input
-              ref={fileInputRef}
-              type="file"
-              onChange={onFileInputChange}
-              className="sr-only"
-              aria-label="Certificate file"
-            />
+              <input
+                ref={fileInputRef}
+                type="file"
+                onChange={onFileInputChange}
+                className="sr-only"
+                aria-label="Certificate file"
+              />
+            </div>
           </div>
 
           {validationError && (

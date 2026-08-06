@@ -230,7 +230,7 @@ export function VerifierPage() {
   return (
     // Left-aligned and wider now that the sidebar hero carries the brand
     // statement — this column is the working surface, not a landing page.
-    <section className="mx-auto w-full max-w-2xl px-5 py-10 sm:px-8 sm:py-14">
+    <section className="mx-auto w-full max-w-3xl px-5 py-10 sm:px-8 lg:px-10">
       <div>
         <span className="inline-flex items-center gap-2 font-mono text-xs uppercase tracking-[0.18em] text-brand-600">
           <span className="h-px w-6 bg-brand-300" aria-hidden="true" />

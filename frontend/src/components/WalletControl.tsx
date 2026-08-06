@@ -1,6 +1,5 @@
 import { useWallet } from '../wallet/context'
 import { shortenAddress } from '../lib/format'
-import { describeRoles } from '../wallet/useRoleRead'
 import { useRoleRead } from '../wallet/useRoleRead'
 import { SEPOLIA_NETWORK } from '../contract'
 
@@ -61,17 +60,19 @@ export function WalletControl({ compact = false }: { compact?: boolean }) {
           </span>
         </div>
 
+        {/* The role itself is stated in the sidebar's role card; only the
+            states that card can't express are surfaced here — a wrong network,
+            an in-flight read, or a read that FAILED (which must never be
+            mistaken for "no role", docs/07 §3). */}
         {!compact && (
           <p className="mt-1 pl-4 text-xs text-brand-200">
-            {isCorrectNetwork
-              ? role.status === 'success'
-                ? describeRoles(role.data)
-                : role.status === 'loading'
-                  ? 'Checking role…'
-                  : role.status === 'error'
-                    ? 'Role unknown'
-                    : ''
-              : `Wrong network — switch to ${SEPOLIA_NETWORK.name}`}
+            {!isCorrectNetwork
+              ? `Wrong network — switch to ${SEPOLIA_NETWORK.name}`
+              : role.status === 'loading'
+                ? 'Checking role…'
+                : role.status === 'error'
+                  ? "Role unknown — couldn't reach the registry"
+                  : ''}
           </p>
         )}
 

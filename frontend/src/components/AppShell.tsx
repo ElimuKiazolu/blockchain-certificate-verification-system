@@ -1,50 +1,50 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { Link, NavLink, useLocation } from 'react-router-dom'
-import { useNavLinks } from './useNavLinks'
+import { useNavLinks, useRoleSummary } from './useNavLinks'
 import { WalletControl } from './WalletControl'
+import { BrandMark } from './BrandMark'
 
 /**
- * The application shell (Phase 8, Slice A) — a left sidebar with the content
- * to its right, replacing the previous top nav.
+ * The application shell — a fixed left sidebar with content to its right.
  *
- * Two widths, one component:
- *   LANDING (/)    35% — a full-height navy "hero" panel: large mark, wordmark,
- *                        positioning line, connect control, then the nav. The
- *                        verifier sits beside it, so the public function is the
- *                        first thing on screen with no wallet involved.
- *   DASHBOARDS     25% — the same panel, compacted into a functional rail so
- *                        the working surface gets the width it needs.
+ * The sidebar is 35% on EVERY route. The dashboards are not a different
+ * layout, only a different sidebar *body*: the verifier adds a short hero
+ * statement above the nav, and that is the sole difference. Issuer, admin and
+ * wallet are byte-identical to each other.
  *
- * Below `lg` the sidebar is not viable as a column, so it becomes a fixed top
- * bar plus a slide-over drawer. Nothing is hidden on mobile — the wallet
- * control and every visible link are in the drawer.
+ * ── The height rule ───────────────────────────────────────────────────────
+ * The panel is exactly one viewport tall and never scrolls internally:
+ * `lg:h-screen` + `overflow-hidden`, with the inner column as a flex stack
+ * whose only growable element is the mark. Everything else is fixed-size, so
+ * the footer line lands on the bottom edge at 100% zoom instead of being
+ * pushed below the fold. The mark absorbs the slack, shrinking on short
+ * viewports rather than forcing a scrollbar.
+ *
+ * Below `lg` a column is not viable, so it becomes a sticky top bar plus a
+ * drawer holding the wallet control and every visible link.
  *
  * Nav contents come from `useNavLinks`, which shows only what the connected
- * wallet can use. That is presentation only: RequireIssuer / RequireAdmin and
- * the contract's own role checks are untouched and remain authoritative.
+ * wallet can use — presentation only. RequireIssuer / RequireAdmin and the
+ * contract's own checks are untouched and remain authoritative.
  */
 export function AppShell({ children }: { children: ReactNode }) {
   const location = useLocation()
   const links = useNavLinks()
+  const roleSummary = useRoleSummary()
   const [drawerOpen, setDrawerOpen] = useState(false)
 
   const isLanding = location.pathname === '/'
 
-  // Never leave the drawer open across a navigation.
   useEffect(() => {
     setDrawerOpen(false)
   }, [location.pathname])
-
-  const sidebarWidth = isLanding
-    ? 'lg:w-[35%] lg:max-w-[30rem]'
-    : 'lg:w-[25%] lg:max-w-[20rem]'
 
   return (
     <div className="min-h-screen bg-paper text-slate-900 lg:flex">
       {/* ── Mobile top bar ─────────────────────────────────────────── */}
       <div className="sticky top-0 z-40 flex items-center justify-between gap-3 border-b border-brand-800 bg-brand-900 px-4 py-3 text-white lg:hidden">
         <Link to="/" className="flex items-center gap-2.5">
-          <BrandMark className="h-8 w-8" />
+          <BrandMark size={34} />
           <span className="font-serif text-base font-semibold tracking-tight">
             Certificate Verification
           </span>
@@ -56,7 +56,9 @@ export function AppShell({ children }: { children: ReactNode }) {
           aria-controls="app-drawer"
           className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg border border-white/20 text-white"
         >
-          <span className="sr-only">{drawerOpen ? 'Close menu' : 'Open menu'}</span>
+          <span className="sr-only">
+            {drawerOpen ? 'Close menu' : 'Open menu'}
+          </span>
           {drawerOpen ? <CloseIcon /> : <MenuIcon />}
         </button>
       </div>
@@ -67,34 +69,25 @@ export function AppShell({ children }: { children: ReactNode }) {
           className="border-b border-brand-800 bg-brand-900 px-4 py-4 text-white lg:hidden"
         >
           <WalletControl compact />
-          <nav className="mt-4 space-y-1">
+          <SectionLabel className="mt-5">Navigation</SectionLabel>
+          <nav className="mt-2 space-y-1">
             {links.map((link) => (
-              <SidebarLink key={link.to} to={link.to} label={link.label} />
+              <SidebarLink key={link.to} link={link} />
             ))}
           </nav>
         </div>
       )}
 
-      {/* ── Sidebar (lg and up) ────────────────────────────────────── */}
-      <aside
-        className={`hidden shrink-0 flex-col bg-brand-900 text-white lg:sticky lg:top-0 lg:flex lg:h-screen ${sidebarWidth}`}
-      >
-        <div
-          className={`flex h-full flex-col ${isLanding ? 'px-8 py-10 xl:px-10' : 'px-6 py-8'}`}
-        >
+      {/* ── Sidebar: 35% on every route ────────────────────────────── */}
+      <aside className="hidden w-full shrink-0 overflow-hidden bg-brand-900 text-white lg:sticky lg:top-0 lg:flex lg:h-screen lg:w-[35%] lg:max-w-[30rem] lg:flex-col">
+        <div className="flex h-full flex-col px-8 py-8 xl:px-10">
           <Link
             to="/"
-            className="flex items-center gap-3 rounded-sm focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-brand-300"
+            className="flex shrink-0 items-center gap-3 rounded-sm focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-brand-300"
           >
-            {/* Placeholder mark — sized generously on the landing panel so the
-                3D blockchain cube can drop straight in here later. */}
-            <BrandMark className={isLanding ? 'h-14 w-14' : 'h-10 w-10'} />
+            <BrandMark size={44} />
             <span className="flex flex-col leading-tight">
-              <span
-                className={`font-serif font-semibold tracking-tight text-white ${
-                  isLanding ? 'text-2xl' : 'text-lg'
-                }`}
-              >
+              <span className="font-serif text-lg font-semibold tracking-tight text-white">
                 Certificate Verification
               </span>
               <span className="font-mono text-[0.65rem] uppercase tracking-[0.2em] text-brand-200">
@@ -103,53 +96,52 @@ export function AppShell({ children }: { children: ReactNode }) {
             </span>
           </Link>
 
-          {isLanding && (
-            <div className="mt-10">
-              <h2 className="text-balance font-serif text-[clamp(1.6rem,1rem+1.6vw,2.1rem)] font-semibold leading-tight text-white">
-                Proof that survives the institution
-              </h2>
-              <p className="mt-4 text-sm leading-relaxed text-brand-100">
-                Every certificate is committed to the Ethereum blockchain, where
-                it can be checked by anyone, forever — without an account, a
-                login, or trusting us.
-              </p>
-              <ul className="mt-6 space-y-2.5">
-                {[
-                  'Tamper-evident by cryptography, not by policy',
-                  'Verifiable with no wallet and no account',
-                  'Whole cohorts committed as one Merkle root',
-                ].map((point) => (
-                  <li
-                    key={point}
-                    className="flex items-start gap-2.5 text-sm text-brand-100"
-                  >
-                    <CheckIcon />
-                    {point}
-                  </li>
-                ))}
-              </ul>
-            </div>
+          {isLanding ? (
+            <>
+              {/* The mark is the only growable element — it absorbs whatever
+                  vertical slack the viewport has, so nothing ever overflows. */}
+              <div className="flex min-h-0 flex-1 items-center justify-center py-4">
+                <BrandMark size={190} />
+              </div>
+              <div className="shrink-0">
+                <h2 className="text-balance font-serif text-2xl font-semibold leading-tight text-white">
+                  Proof that outlives the institution
+                </h2>
+                <p className="mt-2.5 text-sm leading-relaxed text-brand-100">
+                  Certificates are committed to Ethereum, where anyone can check
+                  them — no account, no login, no trust in us required.
+                </p>
+              </div>
+            </>
+          ) : (
+            <div className="min-h-0 flex-1" />
           )}
 
-          <div className={isLanding ? 'mt-10' : 'mt-8'}>
+          <div className="mt-6 shrink-0">
             <WalletControl />
           </div>
 
-          <nav
-            aria-label="Sections"
-            className={`space-y-1 ${isLanding ? 'mt-8' : 'mt-6'}`}
-          >
-            {links.map((link) => (
-              <SidebarLink
-                key={link.to}
-                to={link.to}
-                label={link.label}
-                hint={isLanding ? link.hint : undefined}
-              />
-            ))}
-          </nav>
+          <div className="mt-6 shrink-0">
+            <SectionLabel>Navigation</SectionLabel>
+            <nav aria-label="Sections" className="mt-2 space-y-1">
+              {links.map((link) => (
+                <SidebarLink key={link.to} link={link} />
+              ))}
+            </nav>
+          </div>
 
-          <p className="mt-auto pt-8 text-[0.7rem] leading-relaxed text-brand-300">
+          {roleSummary && (
+            <div className="mt-5 shrink-0 rounded-xl border border-white/15 bg-white/[0.07] px-3.5 py-3">
+              <p className="text-sm font-semibold text-white">
+                {roleSummary.title}
+              </p>
+              <p className="mt-0.5 text-xs leading-relaxed text-brand-200">
+                {roleSummary.detail}
+              </p>
+            </div>
+          )}
+
+          <p className="mt-5 shrink-0 text-[0.7rem] leading-relaxed text-brand-300">
             Sepolia testnet · academic project 01CE0716
           </p>
         </div>
@@ -161,72 +153,58 @@ export function AppShell({ children }: { children: ReactNode }) {
   )
 }
 
-function SidebarLink({
-  to,
-  label,
-  hint,
+function SectionLabel({
+  children,
+  className = '',
 }: {
-  to: string
-  label: string
-  hint?: string
+  children: ReactNode
+  className?: string
 }) {
+  return (
+    <p
+      className={`font-mono text-[0.62rem] font-medium uppercase tracking-[0.2em] text-brand-300 ${className}`}
+    >
+      {children}
+    </p>
+  )
+}
+
+/** Icon + bold label + grey sub-label; active state is a filled pill. */
+function SidebarLink({ link }: { link: ReturnType<typeof useNavLinks>[number] }) {
+  const { to, label, hint, Icon } = link
   return (
     <NavLink
       to={to}
       end={to === '/'}
       className={({ isActive }) =>
-        `block rounded-lg px-3 py-2.5 transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-300 ${
+        `flex items-center gap-3 rounded-xl px-3 py-2.5 transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-300 ${
           isActive
-            ? 'bg-white/10 text-white'
-            : 'text-brand-100 hover:bg-white/5 hover:text-white'
+            ? 'bg-brand-600 text-white shadow-sm'
+            : 'text-brand-100 hover:bg-white/[0.07] hover:text-white'
         }`
       }
     >
-      <span className="block text-sm font-medium">{label}</span>
-      {hint && (
-        <span className="mt-0.5 block text-xs text-brand-300">{hint}</span>
+      {({ isActive }) => (
+        <>
+          <Icon
+            className={`h-[1.15rem] w-[1.15rem] shrink-0 ${
+              isActive ? 'text-white' : 'text-brand-300'
+            }`}
+            aria-hidden="true"
+          />
+          <span className="min-w-0">
+            <span className="block text-sm font-semibold">{label}</span>
+            <span
+              className={`block truncate text-xs ${
+                isActive ? 'text-brand-100' : 'text-brand-300'
+              }`}
+            >
+              {hint}
+            </span>
+          </span>
+        </>
       )}
     </NavLink>
-  )
-}
-
-/** Swap point for the 3D blockchain cube — keep the same box and prop. */
-function BrandMark({ className }: { className?: string }) {
-  return (
-    <span
-      className={`flex shrink-0 items-center justify-center rounded-xl bg-white/10 ring-1 ring-white/15 ${className}`}
-      aria-hidden="true"
-    >
-      <svg
-        className="h-[60%] w-[60%] text-white"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth={2}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      >
-        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z" />
-        <path d="m9 12 2 2 4-4" />
-      </svg>
-    </span>
-  )
-}
-
-function CheckIcon() {
-  return (
-    <svg
-      className="mt-0.5 h-4 w-4 shrink-0 text-brand-300"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={2.5}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <path d="m5 12 5 5L20 7" />
-    </svg>
   )
 }
 
