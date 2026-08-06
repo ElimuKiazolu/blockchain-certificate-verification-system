@@ -228,17 +228,18 @@ export function VerifierPage() {
   const isBulkRunning = bulk?.progress !== null && bulk !== null
 
   return (
-    <section className="mx-auto w-full max-w-2xl px-5 py-12 sm:px-6 sm:py-16">
-      <div className="text-center">
+    // Left-aligned and wider now that the sidebar hero carries the brand
+    // statement — this column is the working surface, not a landing page.
+    <section className="mx-auto w-full max-w-2xl px-5 py-10 sm:px-8 sm:py-14">
+      <div>
         <span className="inline-flex items-center gap-2 font-mono text-xs uppercase tracking-[0.18em] text-brand-600">
           <span className="h-px w-6 bg-brand-300" aria-hidden="true" />
           Public verifier
-          <span className="h-px w-6 bg-brand-300" aria-hidden="true" />
         </span>
-        <h1 className="mt-4 text-balance font-serif text-[clamp(1.9rem,1.3rem+2.6vw,2.75rem)] font-semibold leading-tight tracking-tight text-brand-900">
+        <h1 className="mt-4 text-balance font-serif text-[clamp(1.75rem,1.2rem+2vw,2.5rem)] font-semibold leading-tight tracking-tight text-brand-900">
           Verify a certificate
         </h1>
-        <p className="mx-auto mt-3 max-w-xl text-base leading-relaxed text-slate-600">
+        <p className="mt-3 max-w-xl text-base leading-relaxed text-slate-600">
           Confirm a certificate&apos;s authenticity directly against the
           blockchain — the single source of truth. No account, no wallet; the
           result is read live from the on-chain registry.

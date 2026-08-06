@@ -30,6 +30,16 @@ export interface WalletContextValue {
   error: WalletError | null
   connect: () => Promise<void>
   /**
+   * Re-open MetaMask's ACCOUNT PICKER so the user can switch to a different
+   * account, rather than silently reconnecting the one already authorized
+   * (which is all `eth_requestAccounts` does once permission exists).
+   *
+   * Scope note: this can only ever surface accounts inside the current
+   * visitor's own MetaMask. A site cannot reach another person's or device's
+   * wallet, and nothing about the chosen account is persisted anywhere.
+   */
+  switchAccount: () => Promise<void>
+  /**
    * App-side reset back to idle (clears account, chainId, role, error). Does
    * NOT call MetaMask — a site can't force MetaMask to revoke access; that's
    * done by the user in MetaMask → Connected sites.
