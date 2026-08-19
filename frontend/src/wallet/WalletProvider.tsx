@@ -148,6 +148,64 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     }
   }, [account])
 
+  /**
+   * Force MetaMask's account-selection dialog.
+   *
+   * `eth_requestAccounts` is a no-op once the site is already authorized — it
+   * resolves instantly with the SAME account, which is why "connect" alone
+   * can't switch users. `wallet_requestPermissions` re-prompts the picker, so
+   * the user can genuinely choose a different account (e.g. moving from an
+   * issuer wallet to the admin wallet).
+   *
+   * Only ever shows accounts in THIS visitor's own MetaMask; the result is
+   * held in memory for the session and never persisted.
+   */
+  const switchAccount = useCallback(async () => {
+    const eth = getEthereum()
+    if (!eth) {
+      setStatus('no-provider')
+      return
+    }
+    setError(null)
+    try {
+      await eth.request({
+        method: 'wallet_requestPermissions',
+        params: [{ eth_accounts: {} }],
+      })
+      const accounts = (await eth.request({
+        method: 'eth_accounts',
+      })) as string[]
+      const chainHex = (await eth.request({ method: 'eth_chainId' })) as string
+      setChainId(parseChainId(chainHex))
+      if (accounts.length > 0) {
+        setAccount(accounts[0])
+        setStatus('connected')
+      } else {
+        setAccount(null)
+        setStatus('idle')
+      }
+    } catch (err) {
+      const code = getProviderErrorCode(err)
+      if (code === PROVIDER_ERROR.USER_REJECTED) {
+        setError({
+          kind: 'rejected',
+          message:
+            'You closed the account picker — still using the previously selected account.',
+        })
+      } else if (code === PROVIDER_ERROR.REQUEST_PENDING) {
+        setError({
+          kind: 'pending',
+          message:
+            'A MetaMask request is already open — check the extension window.',
+        })
+      } else {
+        // Some wallets don't implement wallet_requestPermissions. Fall back to
+        // a plain connect so the control never becomes a dead end.
+        await connect()
+      }
+    }
+  }, [connect])
+
   const switchToSepolia = useCallback(async () => {
     const eth = getEthereum()
     if (!eth) return
@@ -210,6 +268,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       isCorrectNetwork: chainId === SEPOLIA_CHAIN_ID,
       error,
       connect,
+      switchAccount,
       disconnect,
       switchToSepolia,
       clearError,
@@ -220,6 +279,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       chainId,
       error,
       connect,
+      switchAccount,
       disconnect,
       switchToSepolia,
       clearError,

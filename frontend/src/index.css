@@ -70,3 +70,66 @@
     animation: none;
   }
 }
+
+/*
+ * Brand mark — a slowly rotating 3D "block", built with CSS 3D transforms
+ * (no library, no canvas, no runtime cost beyond compositing). Six faces on a
+ * preserve-3d parent; size is driven by --cube-size so the same markup scales
+ * between the hero and the compact rail.
+ *
+ * The tilt lives on the animation itself rather than a wrapper, so the reduced
+ * motion fallback can hold the exact same pose — a still, legible cube instead
+ * of a flat square.
+ */
+@keyframes cube-spin {
+  from {
+    transform: rotateX(-22deg) rotateY(0deg);
+  }
+  to {
+    transform: rotateX(-22deg) rotateY(360deg);
+  }
+}
+
+.cube-scene {
+  perspective: 620px;
+}
+
+.cube {
+  position: relative;
+  width: var(--cube-size);
+  height: var(--cube-size);
+  transform-style: preserve-3d;
+  transform: rotateX(-22deg) rotateY(-28deg);
+  animation: cube-spin 20s linear infinite;
+}
+
+.cube-face {
+  position: absolute;
+  inset: 0;
+  backface-visibility: visible;
+}
+
+.cube-face:nth-child(1) {
+  transform: translateZ(calc(var(--cube-size) / 2));
+}
+.cube-face:nth-child(2) {
+  transform: rotateY(180deg) translateZ(calc(var(--cube-size) / 2));
+}
+.cube-face:nth-child(3) {
+  transform: rotateY(90deg) translateZ(calc(var(--cube-size) / 2));
+}
+.cube-face:nth-child(4) {
+  transform: rotateY(-90deg) translateZ(calc(var(--cube-size) / 2));
+}
+.cube-face:nth-child(5) {
+  transform: rotateX(90deg) translateZ(calc(var(--cube-size) / 2));
+}
+.cube-face:nth-child(6) {
+  transform: rotateX(-90deg) translateZ(calc(var(--cube-size) / 2));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cube {
+    animation: none;
+  }
+}

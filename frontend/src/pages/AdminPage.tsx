@@ -19,7 +19,7 @@ export function AdminPage() {
   return (
     <>
       <NetworkBanner />
-      <section className="mx-auto w-full max-w-4xl px-5 py-12 sm:px-6">
+      <section className="mx-auto w-full max-w-5xl px-5 py-10 sm:px-8 lg:px-10">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <span className="inline-flex items-center font-mono text-xs uppercase tracking-[0.18em] text-brand-600">
